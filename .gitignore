@@ -11,3 +11,4 @@ __pycache__/
 .hub.pid
 .robot.pid
 .kiosk.pid
+.claude/skills/
