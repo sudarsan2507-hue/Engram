@@ -1,0 +1,126 @@
+{
+  "n_points": 50000,
+  "device_footprint": {
+    "rss_mb": {
+      "start": 84.3,
+      "model_loaded": 206.5,
+      "shard_loaded": 458.2,
+      "after_100_queries": 460.2
+    },
+    "shard_load_s": 0.39,
+    "index_build_s": 2.34
+  },
+  "queries": 200,
+  "machine": "Windows 10, Intel64 Family 6 Model 78 Stepping 3, GenuineIntel, 2 cores, Python 3.14.2",
+  "seed": {
+    "embed_s": 561.4,
+    "upsert_s": 25.0,
+    "optimize_s": 19.7,
+    "total_s": 606.1,
+    "points_per_s": 85.0
+  },
+  "query_embed_ms": {
+    "p50": 10.226,
+    "p95": 13.75
+  },
+  "scenarios": [
+    {
+      "name": "no filter",
+      "selectivity": null,
+      "p50_ms": 1.394,
+      "p95_ms": 1.702,
+      "scoped_p50_ms": 1.394,
+      "scoped_p95_ms": 1.702
+    },
+    {
+      "name": "trust_status=verified",
+      "selectivity": 0.90148,
+      "p50_ms": 1.628,
+      "p95_ms": 1.936,
+      "scoped_p50_ms": 3.531,
+      "scoped_p95_ms": 4.102
+    },
+    {
+      "name": "verified AND sensitivity=SYNC",
+      "selectivity": 0.72166,
+      "p50_ms": 2.246,
+      "p95_ms": 4.287,
+      "scoped_p50_ms": 7.215,
+      "scoped_p95_ms": 8.77
+    },
+    {
+      "name": "verified AND subject",
+      "selectivity": 0.09015,
+      "p50_ms": 5.464,
+      "p95_ms": 7.823,
+      "scoped_p50_ms": 6.595,
+      "scoped_p95_ms": 9.619
+    },
+    {
+      "name": "verified AND source_device",
+      "selectivity": 0.01816,
+      "p50_ms": 2.837,
+      "p95_ms": 3.614,
+      "scoped_p50_ms": 4.424,
+      "scoped_p95_ms": 5.721
+    },
+    {
+      "name": "verified AND subject AND device",
+      "selectivity": 0.00181,
+      "p50_ms": 1.314,
+      "p95_ms": 1.622,
+      "scoped_p50_ms": 1.82,
+      "scoped_p95_ms": 2.365
+    },
+    {
+      "name": "verified AND last 24h (range)",
+      "selectivity": 0.02886,
+      "p50_ms": 3.213,
+      "p95_ms": 5.064,
+      "scoped_p50_ms": 5.115,
+      "scoped_p95_ms": 7.19
+    },
+    {
+      "name": "verified AND subject AND device + ACORN",
+      "selectivity": null,
+      "p50_ms": 1.57,
+      "p95_ms": 1.856
+    },
+    {
+      "name": "verified AND source_device (NO payload index)",
+      "selectivity": null,
+      "p50_ms": 452.796,
+      "p95_ms": 592.42,
+      "note": "same query, indexes dropped, 50 queries"
+    },
+    {
+      "name": "verified AND subject AND device (NO payload index)",
+      "selectivity": null,
+      "p50_ms": 784.46,
+      "p95_ms": 1229.118,
+      "note": "same query, indexes dropped, 50 queries"
+    }
+  ],
+  "recall_at_10": {
+    "trusted filter": 0.9995,
+    "source_device filter": 1.0,
+    "source_device filter + ACORN": 1.0,
+    "subject+device filter": 1.0
+  },
+  "int8": {
+    "optimize_s": 16.0,
+    "p50_ms": 1.556,
+    "p95_ms": 2.444,
+    "recall_trusted": 0.911
+  },
+  "rss_mb": {
+    "start": 84.3,
+    "model_loaded": 206.3,
+    "after_seed": 1491.3,
+    "after_bench": 1547.3
+  },
+  "disk_mb": {
+    "float32": 577.6,
+    "int8": 652.5
+  }
+}
