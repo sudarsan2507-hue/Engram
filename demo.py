@@ -1,88 +1,127 @@
-"""Scripted demo. Requires hub (:8000), robot (:8001), kiosk (:8002) already
-running against empty ./data dirs (see README `run` section).
+"""Scripted demo against the running services (start them with `python launch.py`).
 
-Sequence: offline search on both -> robot syncs (PRIVATE stays local, SYNC
-drains) -> attack injects unsigned poisoned memory into the hub -> kiosk pulls
-and quarantines it with reasons -> robot and kiosk hold a genuine firmware
-version conflict -> corroboration merge resolves it with the score math shown.
+Every step checks the actual outcome and the script exits non-zero if a
+defense fails -- nothing here is printed from a script of expected results.
 """
-import json
-import os
-import time
+import sys
 
 import httpx
 
-ROBOT = "http://127.0.0.1:8001"
-KIOSK = "http://127.0.0.1:8002"
-HUB = "http://127.0.0.1:8000"
-
-
-def load_seed(name):
-    with open(os.path.join(os.path.dirname(__file__), "engram", "seed_data", f"{name}.json")) as f:
-        return json.load(f)
+HUB, ROBOT, KIOSK = "http://127.0.0.1:8000", "http://127.0.0.1:8001", "http://127.0.0.1:8002"
+DEVICES = {"robot": ROBOT, "kiosk": KIOSK}
+http = httpx.Client(timeout=60)
+failures = []
 
 
 def step(title):
-    print(f"\n{'=' * 60}\n{title}\n{'=' * 60}")
+    print(f"\n== {title} " + "=" * max(0, 66 - len(title)))
 
 
-def write_all(base, items):
-    for item in items:
-        httpx.post(f"{base}/api/write", json=item, timeout=10).raise_for_status()
+def check(ok: bool, label: str):
+    print(f"   [{'PASS' if ok else 'FAIL'}] {label}")
+    if not ok:
+        failures.append(label)
+
+
+def post(url, **kw):
+    r = http.post(url, **kw)
+    r.raise_for_status()
+    return r.json()
+
+
+def get(url, **kw):
+    r = http.get(url, **kw)
+    r.raise_for_status()
+    return r.json()
+
+
+def state(dev):
+    return get(f"{DEVICES[dev]}/api/state")
 
 
 def main():
-    step("1. Seeding robot and kiosk with local memories")
-    write_all(ROBOT, load_seed("robot"))
-    write_all(KIOSK, load_seed("kiosk"))
-    print("robot + kiosk seeded.")
+    step("0. Reset hub + both devices, load MOCK seed memories")
+    post(f"{HUB}/demo/reset")
+    for base in DEVICES.values():
+        post(f"{base}/api/reset")
+        post(f"{base}/api/seed")
+    held = state("robot")["held_back"]
+    for m in held:
+        print(f"   robot holds back {m['subject']!r}: {m['route_reason']}")
+    check(len(held) == 1, "PII router held exactly one robot memory back as PRIVATE")
 
-    step("2. Offline hybrid search on both devices (no hub calls)")
-    for base, label, q in [(ROBOT, "robot", "dock charger fault"), (KIOSK, "kiosk", "firmware version")]:
-        r = httpx.get(f"{base}/api/search", params={"q": q}, timeout=10).json()
-        print(f"[{label}] query={q!r} latency={r['latency_ms']}ms hits={len(r['results'])}")
-        for hit in r["results"][:3]:
-            print(f"   {hit['score']:.3f}  {hit['payload']['subject']} = {hit['payload']['value']}")
+    step("1. Both devices offline: sync is blocked, hybrid search still works")
+    for dev, base in DEVICES.items():
+        post(f"{base}/api/offline", params={"offline": True})
+        blocked = post(f"{base}/api/sync")
+        r = get(f"{base}/api/search", params={"q": "dock 3 charger fault"})
+        top = r["results"][0]["payload"]
+        print(f"   {dev}: sync -> {blocked['reason']!r}")
+        print(f"   {dev}: top hit {top['subject']}={top['value']}  "
+              f"(embed {r['embed_ms']} ms + vector search {r['search_ms']} ms, filter trust_status=verified)")
+        check(not blocked["ok"] and top["subject"] == "dock3", f"{dev} searches offline, cannot sync")
+        post(f"{base}/api/offline", params={"offline": False})
 
-    step("3. Robot syncs with hub (PRIVATE memory must not leave the device)")
-    sync_res = httpx.post(f"{ROBOT}/api/sync", timeout=15).json()
-    print("robot sync result:", sync_res)
-    hub_state = httpx.get(f"{HUB}/state", timeout=10).json()
-    print("hub store count after robot sync:", hub_state["store_count"])
-    private_leaked = any(
-        "email" in m.get("text", "") or "@" in m.get("value", "")
-        for m in httpx.get(f"{HUB}/pull", timeout=10).json()
-    )
-    print("PRIVATE memory leaked to hub?", private_leaked, "(must be False)")
+    step("2. Sync round: robot -> hub -> kiosk -> hub -> robot")
+    print("   robot:", post(f"{ROBOT}/api/sync"))
+    print("   kiosk:", post(f"{KIOSK}/api/sync"))
+    print("   robot:", post(f"{ROBOT}/api/sync"))
+    wire = get(f"{HUB}/pull", params={"since": 0})["items"]
+    check(all(m["sensitivity"] == "SYNC" for m in wire) and not any("@" in m["text"] for m in wire),
+          f"hub holds {len(wire)} memories, none PRIVATE")
+    for dev in DEVICES:
+        dock3 = [m for m in state(dev)["memories"] if m["subject"] == "dock3"]
+        check(all(m["corroborated_by"] == ["kiosk", "robot"] for m in dock3),
+              f"{dev}: dock3=broken corroborated by kiosk+robot")
 
-    step("4. Attacker injects an unsigned poisoned memory directly into the hub")
-    attack_res = httpx.post(f"{ROBOT}/api/attack", timeout=10).json()
-    print("injected:", attack_res["injected"]["subject"], "=", attack_res["injected"]["value"],
-          "from", attack_res["injected"]["source_device"])
+    step("3. Genuine conflict: robot says firmware 2.3.1, kiosk says 2.3.0")
+    winners = {}
+    for dev in DEVICES:
+        c = next(c for c in state(dev)["conflicts"] if c["subject"] == "firmware")
+        winners[dev] = c["winner"]
+        for value, b in c["breakdown"].items():
+            print(f"   {dev}: {value:<6} score = avg_trust x decay x devices = {b['formula']} = {b['score']}")
+    check(len(set(winners.values())) == 1, f"both devices converge on firmware={winners['robot']}")
+    fw = [m for m in state("kiosk")["memories"] if m["subject"] == "firmware"]
+    check(all(m["sig_valid"] for m in fw), "loser is marked superseded, signed content untouched")
 
-    step("5. Kiosk syncs -> poison screen runs on pull")
-    kiosk_sync = httpx.post(f"{KIOSK}/api/sync", timeout=15).json()
-    print("kiosk sync result:", kiosk_sync)
-    q = httpx.get(f"{KIOSK}/api/state", timeout=10).json()["quarantine"]
-    latest = q[0] if q else None
-    if latest:
-        print(f"quarantined: {latest['payload']['subject']} = {latest['payload']['value']!r} "
-              f"from {latest['payload']['source_device']} -- reasons: {latest['reasons']}")
-    else:
-        print("nothing quarantined (unexpected)")
+    step("4. Six poisoning attacks, all claiming the sparking Dock 3 charger is 'safe to ignore'")
+    catalog = get(f"{HUB}/demo/attacks")
+    launched = {}
+    for mode, meta in catalog.items():
+        res = post(f"{HUB}/demo/attack/{mode}")
+        launched[mode] = res["payload"]["id"]
+        print(f"   {meta['title']:<38} -> {'; '.join(res['notes']) or 'injected into hub'}")
+    for dev, base in DEVICES.items():
+        print(f"   {dev} sync:", post(f"{base}/api/sync")["pull"])
 
-    step("6. Robot syncs -> pulls kiosk's firmware claim -> genuine conflict -> corroboration merge")
-    robot_sync = httpx.post(f"{ROBOT}/api/sync", timeout=15).json()
-    print("robot sync result:", robot_sync)
-    robot_state = httpx.get(f"{ROBOT}/api/state", timeout=10).json()
-    firmware = [m for m in robot_state["memories"] if m["subject"] == "firmware"]
-    for m in firmware:
-        print(f"firmware = {m['value']}  corroborated_by={m['corroborated_by']}")
-        if m.get("score_breakdown"):
-            print("  score breakdown:", json.dumps(m["score_breakdown"], indent=2))
+    step("5. Where did each attack end up?")
+    quarantine = {q["id"]: (dev, q["reasons"]) for dev in DEVICES for q in state(dev)["quarantine"]}
+    for mode, mid in launched.items():
+        dev, reasons = quarantine.get(mid, (None, None))
+        check(dev is not None, f"{catalog[mode]['title']:<38} quarantined on {dev}: {reasons}")
+    for dev, base in DEVICES.items():
+        hits = get(f"{base}/api/search", params={"q": "is the dock 3 charger safe", "limit": 20})["results"]
+        check(all(h["payload"]["value"] != "safe to ignore" for h in hits), f"{dev}: poison absent from search")
 
-    step("Demo complete")
+    step("6. The filter is the boundary: same query with the trust filter off")
+    on = get(f"{KIOSK}/api/search", params={"q": "firmware version"})["results"]
+    off = get(f"{KIOSK}/api/search", params={"q": "firmware version", "trusted_only": False})["results"]
+    fmt = lambda rs: sorted({f"{r['payload']['value']}({r['payload']['trust_status']})"
+                             for r in rs if r["payload"]["subject"] == "firmware"})
+    print(f"   filter on : {fmt(on)}")
+    print(f"   filter off: {fmt(off)}")
+    check(len(fmt(off)) > len(fmt(on)), "superseded value only visible with the filter removed")
+
+    step("Result")
+    if failures:
+        print(f"   {len(failures)} check(s) FAILED:")
+        for f in failures:
+            print(f"    - {f}")
+        return 1
+    print("   all checks passed. Inspector: http://127.0.0.1:8000/")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
