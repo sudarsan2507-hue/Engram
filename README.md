@@ -8,10 +8,13 @@ search.
 
 ```
 python launch.py --demo      # starts hub + 2 devices, runs the scripted attack demo
-open http://127.0.0.1:8000   # inspector with a 6-step guided demo
+open http://127.0.0.1:8000   # inspector: seven modules and a 7-step guided tour
 ```
 
-![Inspector after the demo: both devices, attack catalog, hub registry, benchmark](docs/inspector.png)
+![Floor module in "believe everything synced" mode: the robot routes to the sparking Dock 3 on a quarantined claim](docs/inspector.png)
+
+*The Floor module draws the warehouse from the robot's own memory. Flip it to "believe everything synced"
+and the robot reroutes to the sparking charger on a claim the screen quarantined; in trusted memory it goes to Dock 2.*
 
 ---
 
@@ -21,8 +24,11 @@ open http://127.0.0.1:8000   # inspector with a 6-step guided demo
    syncs them, launches six poisoning attacks, and **asserts** the outcome of
    every step (exits non-zero if any defense fails). Sample output is under
    [Demo output](#demo-output).
-2. **Open the inspector** at `http://127.0.0.1:8000` and click the guided demo
-   steps 1–6. Every button calls the real APIs.
+2. **Open the inspector** at `http://127.0.0.1:8000` and follow the tour dock at
+   the bottom (7 steps). Each step calls the real APIs and opens the module to
+   watch: Floor (the robot's beliefs on a warehouse map, with sync traffic
+   animated), Sync pipeline, Devices, Attack lab (which check stopped each
+   attack), Conflicts, Benchmark, Hub.
 3. **Read [`engram/poison_screen.py`](engram/poison_screen.py)** — the trust
    decision, ~100 lines.
 4. **Read [`engram/device.py`](engram/device.py)** `pull()` — the staging shard

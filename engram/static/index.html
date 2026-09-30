@@ -3,602 +3,139 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Engram Inspector</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2314213d'/%3E%3Crect x='7' y='3' width='2' height='10' fill='%23f2b705'/%3E%3C/svg%3E">
-<style>
-  @font-face {
-    font-family: "Archivo"; src: url("static/vendor/archivo-latin-var.woff2") format("woff2");
-    font-weight: 400 800; font-stretch: 62% 125%; font-display: swap;
-  }
-  :root {
-    --ground: #e4e8e7; --panel: #f3f5f4; --sunk: #eaeeed;
-    --ink: #14213d; --ink-2: #3c4760; --ink-3: #5f6a7e; --rule: rgba(20, 33, 61, .13); --rule-2: rgba(20, 33, 61, .22);
-    --verified: #1f7a4d; --verified-bg: #dcefe4; --quarantine: #b3261e; --quarantine-bg: #f6dedc;
-    --superseded: #8a5d00; --superseded-bg: #f7eacb; --hazard: #f2b705; --info: #1e4a8c; --info-bg: #dde6f4;
-    --ease: cubic-bezier(.16, 1, .3, 1);
-    --r: 10px;
-  }
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1.5 "Archivo", system-ui, sans-serif;
-         font-variant-numeric: tabular-nums; }
-  code, .code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .86em; background: var(--sunk);
-                padding: 1px 5px; border-radius: 4px; color: var(--ink-2); }
-  a { color: var(--info); }
-  :focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
-
-  .wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
-  header.top { padding: 34px 0 18px; }
-  .brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
-  .brand h1 { margin: 0; font-size: clamp(2.6rem, 6vw, 4.6rem); line-height: .9; font-weight: 800; font-stretch: 125%;
-              letter-spacing: -.035em; }
-  .brand p { margin: 0; max-width: 58ch; color: var(--ink-2); font-size: 1.02rem; }
-  .status { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; color: var(--ink-3); font-size: .9rem; }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--ink-3); vertical-align: 1px; }
-  .dot.on { background: var(--verified); } .dot.off { background: var(--quarantine); }
-  .mock { color: var(--superseded); }
-
-  section.block { margin: 22px 0; }
-  .block > h2 { margin: 0 0 4px; font-size: 1.35rem; font-weight: 750; font-stretch: 112%; letter-spacing: -.015em; }
-  .block > .lede { margin: 0 0 14px; color: var(--ink-3); max-width: 80ch; }
-  .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--r); padding: 16px; min-width: 0; }
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 1000px) { .split { grid-template-columns: 1fr; } }
-
-  button { font: inherit; font-weight: 600; font-size: .92rem; border: 1px solid var(--rule-2); background: var(--panel); color: var(--ink);
-           padding: 7px 13px; border-radius: 8px; cursor: pointer; transition: transform .15s var(--ease), background-color .15s, border-color .15s; }
-  button:hover { border-color: var(--ink-2); }
-  button:active { transform: translateY(1px) scale(.98); }
-  button.go { background: var(--ink); color: #f3f5f4; border-color: var(--ink); }
-  button.go:hover { background: #22325a; }
-  button.hit { background: var(--quarantine-bg); color: var(--quarantine); border-color: rgba(179, 38, 30, .35); }
-  button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-  input, select { font: inherit; color: var(--ink); background: #fbfcfc; border: 1px solid var(--rule-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
-  label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: .92rem; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .grow { flex: 1 1 180px; }
-  .muted { color: var(--ink-3); } .small { font-size: .86rem; }
-
-  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: .8rem; font-weight: 600; white-space: nowrap; background: var(--sunk); color: var(--ink-2); }
-  .pill.verified { background: var(--verified-bg); color: var(--verified); }
-  .pill.quarantined { background: var(--quarantine-bg); color: var(--quarantine); }
-  .pill.superseded { background: var(--superseded-bg); color: var(--superseded); }
-  .pill.info { background: var(--info-bg); color: var(--info); }
-
-  /* guided demo: a real sequence, so it is numbered */
-  .steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-  @media (max-width: 900px) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  @media (max-width: 520px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .step { text-align: left; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
-  .step b { font-size: 1.25rem; font-stretch: 125%; line-height: 1; color: var(--ink-3); }
-  .step.done { border-color: var(--verified); } .step.done b { color: var(--verified); }
-  .step.running { border-color: var(--info); }
-  .narration { margin-top: 12px; padding: 12px 14px; border-left: 4px solid var(--ink); background: var(--sunk); border-radius: 0 8px 8px 0; max-width: 100ch; }
-
-  /* pipeline */
-  #pipeline svg { width: 100%; height: auto; display: block; }
-  .lane-label { font-weight: 750; font-stretch: 112%; font-size: 15px; fill: var(--ink); }
-  .node-label { font-size: 12.5px; fill: var(--ink-2); }
-  .node-count { font-size: 13px; font-weight: 700; fill: var(--ink); }
-
-  /* defense matrix */
-  .matrix { width: 100%; border-collapse: separate; border-spacing: 0; }
-  .matrix th, .matrix td { padding: 10px 8px; border-bottom: 1px solid var(--rule); text-align: center; vertical-align: middle; }
-  .matrix th { font-weight: 600; font-size: .84rem; color: var(--ink-3); }
-  .matrix th:first-child, .matrix td:first-child { text-align: left; }
-  .matrix td.attack { min-width: 260px; }
-  .matrix td.attack b { display: block; }
-  .cell { width: 26px; height: 26px; border-radius: 6px; display: inline-grid; place-items: center; background: var(--sunk); color: transparent;
-          transition: background-color .4s var(--ease), transform .4s var(--ease); }
-  .cell.fired { background: var(--quarantine); color: #fff; transform: scale(1.06); }
-  .cell.fired::after { content: "✕"; font-size: 13px; font-weight: 700; }
-  .scroll-x { overflow-x: auto; }
-
-  /* devices */
-  .dev-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 10px; }
-  .dev-head h3 { margin: 0; font-size: 1.5rem; font-weight: 800; font-stretch: 118%; letter-spacing: -.02em; text-transform: capitalize; }
-  .counts { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; font-size: .9rem; color: var(--ink-3); }
-  .counts b { font-size: 1.15rem; color: var(--ink); margin-right: 3px; }
-  .tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--rule); margin: 14px 0 10px; }
-  .tabs button { border: none; border-radius: 8px 8px 0 0; background: none; color: var(--ink-3); padding: 8px 11px; }
-  .tabs button[aria-selected="true"] { color: var(--ink); background: var(--sunk); box-shadow: inset 0 -2px 0 var(--ink); }
-  .tabpane { max-height: 380px; overflow: auto; }
-  table.data { width: 100%; border-collapse: collapse; font-size: .9rem; }
-  table.data th { text-align: left; font-weight: 600; font-size: .8rem; color: var(--ink-3); position: sticky; top: 0; background: var(--panel); }
-  table.data td, table.data th { padding: 6px 7px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  .qcard, .ccard { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: #f8faf9; }
-  .qcard { border-left: 4px solid var(--quarantine); }
-  .bar { height: 10px; border-radius: 5px; background: var(--ink-3); transform-origin: left; transition: transform .7s var(--ease); }
-  .bar.win { background: var(--verified); }
-  .timing { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--rule); margin: 6px 0 8px; }
-  .timing span { display: block; height: 100%; }
-
-  /* benchmark */
-  #bench-chart svg { width: 100%; height: auto; display: block; }
-  .findings { margin: 0; padding-left: 18px; color: var(--ink-2); }
-  .findings li { margin: 6px 0; }
-  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .84rem; color: var(--ink-3); margin: 6px 0; }
-  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
-
-  /* one reveal per section, once */
-  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
-  .reveal.in { opacity: 1; transform: none; }
-  @media (prefers-reduced-motion: reduce) {
-    .reveal { opacity: 1; transform: none; transition: none; }
-    *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
-  }
-  @media (max-width: 600px) { .wrap { padding: 0 16px; } header.top { padding-top: 22px; } }
-</style>
+<title>Engram</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%230e2a4d'/%3E%3Cpath d='M4 4h8M4 8h6M4 12h8' stroke='%23eef4fc' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="static/app.css">
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <div class="brand">
-      <h1>Engram</h1>
-      <p>Offline memory for warehouse robots that refuses to be poisoned. Every device searches its own Qdrant Edge shard;
-        every synced memory is screened before it can be believed.</p>
+<div class="shell">
+  <aside class="rail">
+    <div>
+      <p class="wordmark">Engram</p>
+      <p>Memory for warehouse robots that refuses to be poisoned.</p>
     </div>
-    <div class="status" id="status"></div>
-  </header>
+    <nav class="nav" id="nav" aria-label="Modules"></nav>
+    <div class="rail-status" id="rail-status"></div>
+  </aside>
 
-  <section class="block">
-    <h2>Walk through the demo</h2>
-    <p class="lede">Six steps, each calling the real APIs. Watch the pipeline and the device panels change.</p>
-    <div class="steps" id="steps"></div>
-    <div class="narration" id="narration">Start with step 1. It resets both devices and loads their mock memories.</div>
-  </section>
+  <main>
+    <section class="view" id="view-floor" aria-labelledby="h-floor">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div><h1 id="h-floor">The warehouse, as the robot believes it</h1>
+            <p>The map is drawn from the robot's own memory. Switch to "believe everything synced" to see where it would go if
+              the poison screen did not exist.</p></div>
+          <div class="titleblock" data-sheet="1"></div>
+        </div>
+        <div class="floor-grid">
+          <div class="frame" id="floor-map"></div>
+          <div class="frame">
+            <h2>What the robot trusts</h2>
+            <div class="segmented" role="group" aria-label="Belief mode">
+              <button id="mode-trusted" aria-pressed="true" onclick="setMode('trusted')">Trusted memory</button>
+              <button id="mode-all" class="danger" aria-pressed="false" onclick="setMode('all')">Believe everything synced</button>
+            </div>
+            <ul class="belief-list" id="beliefs" style="margin-top:12px"></ul>
+            <div id="verdict"></div>
+            <div class="row" style="margin-top:14px">
+              <button onclick="sync('robot')">Sync robot</button>
+              <button onclick="sync('kiosk')">Sync kiosk</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <section class="block reveal">
-    <h2>Where synced memories go</h2>
-    <p class="lede">Everything a device pulls lands in a staging shard, passes the poison screen, and only then reaches the
-      trusted shard that search reads. Widths are live counts.</p>
-    <div class="panel" id="pipeline"></div>
-  </section>
+    <section class="view" id="view-pipeline" aria-labelledby="h-pipeline">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div><h1 id="h-pipeline">Sync pipeline</h1>
+            <p>Everything a device pulls lands in a staging shard, passes the poison screen, and only then reaches the trusted
+              shard that search reads. Widths are live counts.</p></div>
+          <div class="titleblock" data-sheet="2"></div>
+        </div>
+        <div class="frame" id="pipeline"></div>
+        <div class="grid2" style="margin-top:18px">
+          <div class="frame"><h2>Robot's outbox</h2><div id="queue-robot"></div></div>
+          <div class="frame"><h2>Kiosk's outbox</h2><div id="queue-kiosk"></div></div>
+        </div>
+      </div>
+    </section>
 
-  <section class="block reveal">
-    <h2>Which check stopped each attack</h2>
-    <p class="lede">All six attacks claim the sparking Dock 3 charger is "safe to ignore". Launch one, then sync a device.
-      A red cell means that check fired. Two attacks carry valid signatures, so cryptography alone would have let them through.</p>
-    <div class="panel scroll-x" id="matrix"></div>
-  </section>
+    <section class="view" id="view-devices" aria-labelledby="h-devices">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div><h1 id="h-devices">Devices</h1>
+            <p>Each device searches its own shard with the payload filter <code>trust_status = verified</code>. Untick the filter
+              to see what it keeps out.</p></div>
+          <div class="titleblock" data-sheet="3"></div>
+        </div>
+        <div class="grid2"><div class="frame" id="dev-robot"></div><div class="frame" id="dev-kiosk"></div></div>
+      </div>
+    </section>
 
-  <section class="block reveal">
-    <h2>The devices</h2>
-    <p class="lede">Search runs locally with the payload filter <code>trust_status = verified</code>. Untick the filter to see
-      what it keeps out.</p>
-    <div class="split"><div class="panel" id="dev-robot"></div><div class="panel" id="dev-kiosk"></div></div>
-  </section>
+    <section class="view" id="view-attacks" aria-labelledby="h-attacks">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div><h1 id="h-attacks">Attack lab</h1>
+            <p>Every attack claims the sparking Dock 3 charger is "safe to ignore". Launch one, then sync a device. A red cell
+              marks the check that fired. Two attacks carry valid signatures, so cryptography alone would have let them in.</p></div>
+          <div class="titleblock" data-sheet="4"></div>
+        </div>
+        <div class="frame scroll-x" id="matrix"></div>
+        <div class="row" style="margin-top:14px">
+          <button class="hit" onclick="launchAll()">Launch all six</button>
+          <button onclick="sync('kiosk').then(() => sync('robot'))">Sync both devices</button>
+        </div>
+      </div>
+    </section>
 
-  <section class="block reveal">
-    <h2>What the filter costs at 50,000 memories</h2>
-    <p class="lede">Vector search latency per query, embedding excluded, log scale. Measured by <code>benchmark.py</code> on a
-      4-thread laptop CPU.</p>
-    <div class="panel"><div class="legend" id="bench-legend"></div><div id="bench-chart"></div>
-      <div id="bench-notes" style="margin-top:14px; max-width: 100ch"></div></div>
-  </section>
+    <section class="view" id="view-conflicts" aria-labelledby="h-conflicts">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div><h1 id="h-conflicts">Conflicts</h1>
+            <p>When honest devices disagree, each value scores <code>average trust × recency decay × agreeing devices</code>.
+              Both devices use the same registry trust, so they reach the same answer. Losers are marked superseded, never rewritten.</p></div>
+          <div class="titleblock" data-sheet="5"></div>
+        </div>
+        <div class="grid2"><div class="frame" id="conf-robot"></div><div class="frame" id="conf-kiosk"></div></div>
+      </div>
+    </section>
 
-  <section class="block reveal">
-    <h2>Hub registry</h2>
-    <p class="lede">The hub relays memories but never screens them. Trust scores are operator config; a device's key is pinned
-      at first registration.</p>
-    <div class="panel scroll-x" id="hub"></div>
-  </section>
-  <p class="small muted" style="margin:28px 0 40px">Seed memories are <span class="mock">mock data</span>. Two devices are simulated
-    as separate shards; "offline" blocks their hub calls.</p>
+    <section class="view" id="view-benchmark" aria-labelledby="h-benchmark">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div><h1 id="h-benchmark">What the filter costs</h1>
+            <p>Vector search latency per query over 50,000 memories, query embedding excluded, log scale. Measured by
+              <code>benchmark.py</code> on a laptop CPU.</p></div>
+          <div class="titleblock" data-sheet="6"></div>
+        </div>
+        <div class="frame"><div class="legend" id="bench-legend"></div><div id="bench-chart"></div></div>
+        <div class="frame" id="bench-notes" style="margin-top:18px"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-hub" aria-labelledby="h-hub">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div><h1 id="h-hub">Hub</h1>
+            <p>The hub relays memories but never screens them. Trust scores are operator config, and a device's key is pinned
+              the first time it registers.</p></div>
+          <div class="titleblock" data-sheet="7"></div>
+        </div>
+        <div class="grid2">
+          <div class="frame scroll-x"><h2>Registry</h2><div id="hub-registry"></div></div>
+          <div class="frame"><h2>Events</h2><div id="hub-events" class="tabpane"></div></div>
+        </div>
+        <div class="frame scroll-x" style="margin-top:18px"><h2>Append-only log (latest 60)</h2><div id="hub-log"></div></div>
+      </div>
+    </section>
+  </main>
 </div>
 
+<div class="tour" id="tour" role="region" aria-label="Guided tour"></div>
+
 <script src="static/vendor/d3.v7.min.js"></script>
-<script>
-const HUB = "";
-let DEVICES = {};
-const ui = { robot: { tab: "memories", trusted: true, search: null, lastSync: "" },
-             kiosk: { tab: "memories", trusted: true, search: null, lastSync: "" } };
-const states = {};
-let hubState = null, catalog = {}, bench = null;
-const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const pill = (cls, text) => `<span class="pill ${cls}">${esc(text)}</span>`;
-const clock = ms => new Date(ms).toLocaleTimeString();
-const statusPill = s => pill(s === "verified" ? "verified" : s === "superseded" ? "superseded" : "quarantined", s);
-
-async function api(base, path, opts = {}) {
-  const r = await fetch(base + path, opts);
-  if (!r.ok) throw new Error(`${path} returned HTTP ${r.status}`);
-  return r.json();
-}
-const post = (base, path) => api(base, path, { method: "POST" });
-
-// ---------------------------------------------------------------- pipeline (D3)
-const OUTCOMES = [
-  ["promoted", "Promoted", "var(--verified)"],
-  ["corroborated", "Corroborated", "#3d9a6c"],
-  ["conflicts", "Conflict resolved", "var(--hazard)"],
-  ["quarantined", "Quarantined", "var(--quarantine)"],
-];
-function drawPipeline() {
-  const el = document.getElementById("pipeline");
-  const W = 1000, laneH = 128, top = 44, H = top + laneH * 2 + 6;
-  let svg = d3.select(el).select("svg");
-  if (svg.empty()) {
-    svg = d3.select(el).append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img")
-      .attr("aria-label", "Pipeline from hub through staging and poison screen to trusted shard or quarantine");
-    const defs = svg.append("defs");
-    const p = defs.append("pattern").attr("id", "hazard").attr("width", 12).attr("height", 12)
-      .attr("patternUnits", "userSpaceOnUse").attr("patternTransform", "rotate(45)");
-    p.append("rect").attr("width", 12).attr("height", 12).attr("fill", "#14213d");
-    p.append("rect").attr("width", 6).attr("height", 12).attr("fill", "#f2b705");
-    const hdr = svg.append("g").attr("class", "node-label");
-    [["Hub log", 20], ["Staging shard", 250], ["Poison screen", 470], ["Outcome", 720]].forEach(([t, x]) =>
-      hdr.append("text").attr("x", x).attr("y", 18).text(t).style("font-weight", 600));
-    hdr.append("text").attr("x", 470).attr("y", 34).text("signature, pinned key, trust, corroboration, semantic")
-      .style("font-size", "11.5px").attr("fill", "#5f6a7e");
-    svg.append("g").attr("class", "lanes");
-  }
-  const hubCount = hubState ? hubState.log_size : 0;
-  const lanes = Object.keys(DEVICES).map((id, i) => ({ id, i, flow: (states[id] && states[id].flow) || {} }));
-  const t = svg.transition().duration(reduceMotion ? 0 : 900).ease(d3.easeCubicOut);
-
-  const g = svg.select("g.lanes").selectAll("g.lane").data(lanes, d => d.id).join(enter => {
-    const e = enter.append("g").attr("class", "lane");
-    e.append("text").attr("class", "lane-label").attr("x", 20).attr("y", d => top + d.i * laneH + 16).text(d => d.id);
-    e.append("rect").attr("class", "hubnode").attr("x", 20).attr("width", 150).attr("height", 64).attr("rx", 8)
-      .attr("y", d => top + d.i * laneH + 26).attr("fill", "#dde6f4");
-    e.append("text").attr("class", "node-count hubtext").attr("x", 34).attr("y", d => top + d.i * laneH + 56);
-    e.append("text").attr("class", "node-label hubsub").attr("x", 34).attr("y", d => top + d.i * laneH + 76);
-    e.append("rect").attr("class", "stage").attr("x", 250).attr("width", 150).attr("height", 64).attr("rx", 8)
-      .attr("y", d => top + d.i * laneH + 26).attr("fill", "#eaeeed").attr("stroke", "rgba(20,33,61,.22)");
-    e.append("text").attr("class", "node-count stagetext").attr("x", 264).attr("y", d => top + d.i * laneH + 56);
-    e.append("text").attr("class", "node-label").attr("x", 264).attr("y", d => top + d.i * laneH + 76).text("embedded once");
-    e.append("rect").attr("class", "gate").attr("x", 470).attr("width", 12).attr("height", 100).attr("rx", 3)
-      .attr("y", d => top + d.i * laneH + 8).attr("fill", "#14213d");
-    e.append("path").attr("class", "feed1").attr("fill", "none").attr("stroke", "#9fb3d6").attr("stroke-width", 10).attr("opacity", .55);
-    e.append("path").attr("class", "feed2").attr("fill", "none").attr("stroke", "#9fb3d6").attr("stroke-width", 10).attr("opacity", .55);
-    e.append("g").attr("class", "outs");
-    e.append("text").attr("class", "node-label empty").attr("x", 720).attr("y", d => top + d.i * laneH + 60);
-    return e;
-  });
-
-  g.select(".hubtext").text(`${hubCount} memories`);
-  g.select(".hubsub").text("append-only, untrusted");
-  g.select(".stagetext").text(d => `${d.flow.received || 0} pulled`);
-  g.select(".feed1").attr("d", d => { const y = top + d.i * laneH + 58; return `M170,${y} C210,${y} 210,${y} 250,${y}`; });
-  g.select(".feed2").attr("d", d => { const y = top + d.i * laneH + 58; return `M400,${y} C435,${y} 435,${y} 470,${y}`; });
-  g.select(".empty").text(d => (d.flow.received ? "" : "Nothing pulled yet. Sync this device."));
-
-  g.each(function (d) {
-    const total = OUTCOMES.reduce((s, [k]) => s + (d.flow[k] || 0), 0);
-    const y0 = top + d.i * laneH + 6, span = laneH - 22, gap = 5;
-    const shown = OUTCOMES.map(([k, label, color]) => ({ k, label, color, n: d.flow[k] || 0 }));
-    const usable = span - gap * (shown.length - 1);
-    let y = y0;
-    shown.forEach(o => {
-      o.h = total ? Math.max(o.n ? 6 : 2, usable * o.n / total) : usable / shown.length;
-      o.y = y; y += o.h + gap;
-    });
-    const scale = total ? usable / d3.sum(shown, o => o.h) : 1;
-    y = y0; shown.forEach(o => { o.h *= scale; o.y = y; y += o.h + gap; });
-    const outs = d3.select(this).select("g.outs").selectAll("g.out").data(shown, o => o.k).join(enter => {
-      const e = enter.append("g").attr("class", "out");
-      e.append("path").attr("class", "ribbon").attr("fill", o => o.color).attr("opacity", .28);
-      e.append("rect").attr("class", "seg").attr("x", 720).attr("width", 14).attr("rx", 3)
-        .attr("fill", o => o.k === "quarantined" ? "url(#hazard)" : o.color);
-      e.append("text").attr("class", "node-label lbl").attr("x", 744);
-      return e;
-    });
-    const gy = top + d.i * laneH + 58;
-    outs.select(".seg").transition(t).attr("y", o => o.y).attr("height", o => Math.max(o.h, 1)).attr("opacity", total ? 1 : .25);
-    outs.select(".ribbon").transition(t).attr("opacity", o => (o.n ? .3 : 0)).attr("d", o => {
-      const h = Math.max(2, Math.min(40, o.h)), yc = o.y + o.h / 2;
-      return `M482,${gy - h / 2} C600,${gy - h / 2} 600,${yc - h / 2} 720,${yc - h / 2} L720,${yc + h / 2} C600,${yc + h / 2} 600,${gy + h / 2} 482,${gy + h / 2} Z`;
-    });
-    outs.select(".lbl").transition(t).attr("y", o => o.y + o.h / 2 + 4)
-      .text(o => (total ? `${o.label}  ${o.n}` : o.label)).style("font-weight", o => (o.n ? 600 : 400))
-      .style("fill", o => (o.k === "quarantined" && o.n ? "var(--quarantine)" : null));
-  });
-}
-
-// ---------------------------------------------------------------- defense matrix
-const CHECKS = [
-  ["Signature and registration", r => ["unregistered_device", "invalid_or_missing_signature", "malformed_payload", "private_memory_on_the_wire"].includes(r)],
-  ["Pinned key", r => r === "registry_key_mismatch"],
-  ["Trust score", r => r.startsWith("low_trust_source")],
-  ["Corroboration", r => r === "contradicts_corroborated_memory"],
-  ["Semantic neighbors", r => r === "semantic_conflict_with_corroborated_memory"],
-];
-function renderMatrix() {
-  const el = document.getElementById("matrix");
-  if (!Object.keys(catalog).length) { el.innerHTML = `<p class="muted">The hub is not reachable, so the attack catalog could not load.</p>`; return; }
-  const launched = hubState ? hubState.attacks : [];
-  const rows = Object.entries(catalog).map(([mode, a]) => {
-    const last = [...launched].reverse().find(x => x.mode === mode);
-    let reasons = [], where = [], leaked = [];
-    if (last) for (const [dev, s] of Object.entries(states)) {
-      if (!s) continue;
-      const q = s.quarantine.find(q => q.id === last.id);
-      if (q) { reasons = reasons.concat(q.reasons); where.push(dev); }
-      if (s.memories.some(m => m.id === last.id && m.trust_status === "verified")) leaked.push(dev);
-    }
-    const cells = CHECKS.map(([name, test]) => {
-      const fired = reasons.some(test);
-      return `<td><span class="cell ${fired ? "fired" : ""}" role="img" aria-label="${esc(name)}: ${fired ? "fired" : "not fired"}"></span></td>`;
-    }).join("");
-    const outcome = !last ? `<span class="muted">Not launched</span>`
-      : leaked.length ? pill("quarantined", `Reached trusted shard on ${leaked.join(", ")}`)
-      : where.length ? pill("verified", `Stopped on ${where.join(" and ")}`)
-      : `<span class="muted">In the hub. Sync ${esc(last.source_device === "kiosk" ? "robot" : last.source_device === "robot" ? "kiosk" : "a device")}.</span>`;
-    return `<tr><td class="attack"><b>${esc(a.title)}</b><span class="small muted">${esc(a.story)}</span></td>${cells}
-      <td>${outcome}</td><td><button class="hit" data-mode="${esc(mode)}" onclick="attack(this.dataset.mode)">Launch</button></td></tr>`;
-  }).join("");
-  el.innerHTML = `<table class="matrix"><thead><tr><th>Attack</th>${CHECKS.map(([n]) => `<th>${esc(n)}</th>`).join("")}<th>Result</th><th></th></tr></thead>
-    <tbody>${rows}</tbody></table>`;
-}
-
-// ---------------------------------------------------------------- devices
-function renderDevice(id) {
-  const s = states[id], u = ui[id], el = document.getElementById(`dev-${id}`);
-  if (!s) { el.innerHTML = `<div class="dev-head"><h3>${esc(id)}</h3></div><p class="muted">Not reachable. Start everything with <code>python launch.py</code>.</p>`; return; }
-  const st = s.stats;
-  const tabs = [["memories", `Memories`], ["queue", "Sync queue"], ["quarantine", `Quarantine${s.quarantine.length ? ` (${s.quarantine.length})` : ""}`],
-                ["conflicts", `Conflicts${s.conflicts.length ? ` (${s.conflicts.length})` : ""}`], ["write", "Add memory"], ["log", "Activity"]];
-  el.innerHTML = `
-    <div class="dev-head"><h3>${esc(id)}</h3>${s.offline ? pill("quarantined", "offline") : pill("verified", "online")}
-      <span class="small muted" title="Ed25519 public key">key <code>${esc(s.public_key.slice(0, 12))}</code></span></div>
-    <div class="row">
-      <button onclick="toggleOffline('${id}', ${!s.offline})">${s.offline ? "Go online" : "Go offline"}</button>
-      <button class="go" onclick="sync('${id}')" ${s.offline ? "disabled" : ""}>Sync with hub</button>
-      <span class="small muted">${esc(u.lastSync)}</span>
-    </div>
-    <div class="counts"><span><b>${st.verified}</b>verified</span><span><b>${st.superseded}</b>superseded</span>
-      <span><b>${s.quarantine.length}</b>quarantined</span><span><b>${st.private}</b>kept private</span><span><b>${st.from_peers}</b>from peers</span></div>
-    <form class="row" onsubmit="search(event, '${id}')">
-      <input class="grow" name="q" aria-label="Search ${esc(id)}" placeholder="Search this device, e.g. dock 3 charger" value="${esc(u.search ? u.search.q : "")}">
-      <label class="check"><input type="checkbox" name="trusted" ${u.trusted ? "checked" : ""}> Trust filter</label>
-      <button>Search</button>
-    </form>
-    <div>${renderSearch(u.search)}</div>
-    <div class="tabs" role="tablist">${tabs.map(([k, label]) =>
-      `<button role="tab" aria-selected="${u.tab === k}" onclick="setTab('${id}', '${k}')">${label}</button>`).join("")}</div>
-    <div class="tabpane" role="tabpanel">${renderTab(id, s, u.tab)}</div>`;
-  el.querySelectorAll(".bar[data-w]").forEach(b => requestAnimationFrame(() => { b.style.transform = `scaleX(${b.dataset.w})`; }));
-}
-
-function renderSearch(r) {
-  if (!r) return "";
-  if (r.error) return `<p class="small" style="color:var(--quarantine)">${esc(r.error)}</p>`;
-  const total = r.embed_ms + r.search_ms || 1;
-  return `<p class="small muted" style="margin:10px 0 0">${r.results.length} results. Embedding the query took <b>${r.embed_ms} ms</b>,
-      vector search <b>${r.search_ms} ms</b>. Filter: ${r.filter ? "<code>trust_status = verified</code>" : "<b style='color:var(--quarantine)'>none, unsafe view</b>"}</p>
-    <div class="timing" aria-hidden="true"><span style="width:${100 * r.embed_ms / total}%;background:#8f9bb3"></span><span style="width:${100 * r.search_ms / total}%;background:var(--ink)"></span></div>
-    <div class="scroll-x"><table class="data"><tr><th>RRF</th><th>Subject</th><th>Value</th><th>Status</th><th>Text</th></tr>
-    ${r.results.map(h => `<tr><td>${h.score.toFixed(3)}</td><td>${esc(h.payload.subject)}</td><td>${esc(h.payload.value)}</td>
-      <td>${statusPill(h.payload.trust_status)}</td><td class="muted">${esc(h.payload.text)}</td></tr>`).join("")}</table></div>`;
-}
-
-function renderTab(id, s, tab) {
-  if (tab === "memories") {
-    return `<table class="data"><tr><th>Subject</th><th>Value</th><th>Status</th><th>Route</th><th>From</th><th>Agreed by</th><th>Signature</th></tr>
-      ${s.memories.map(m => `<tr><td>${esc(m.subject)}</td><td>${esc(m.value)}</td><td>${statusPill(m.trust_status)}</td>
-        <td>${m.sensitivity === "PRIVATE" ? pill("superseded", "private") : pill("info", "sync")}</td><td>${esc(m.source_device)}</td>
-        <td>${esc((m.corroborated_by || []).join(", "))}</td><td>${m.sig_valid ? pill("verified", "valid") : pill("quarantined", "invalid")}</td></tr>`).join("")}</table>`;
-  }
-  if (tab === "queue") {
-    const rows = s.sync_queue.map(m => `<tr><td>${esc(m.subject)}</td><td>${pill("info", "will push")}</td><td class="muted">${esc(m.route_reason)}</td></tr>`)
-      .concat(s.held_back.map(m => `<tr><td>${esc(m.subject)}</td><td>${pill("superseded", "stays here")}</td><td class="muted">${esc(m.route_reason)}</td></tr>`));
-    return `<p class="small muted">The queue is itself a filter: <code>source_device = ${esc(id)} AND sensitivity = SYNC AND ts &gt; last push</code>.
-      A private memory cannot match it.</p><table class="data"><tr><th>Subject</th><th>Route</th><th>Reason</th></tr>
-      ${rows.join("") || `<tr><td colspan="3" class="muted">Nothing waiting. Write a memory or sync.</td></tr>`}</table>`;
-  }
-  if (tab === "quarantine") {
-    if (!s.quarantine.length) return `<p class="muted">Nothing quarantined. Launch an attack above, then sync this device.</p>`;
-    const PROV = ["unregistered_device", "registry_key_mismatch", "invalid_or_missing_signature", "private_memory_on_the_wire", "malformed_payload"];
-    return s.quarantine.map(q => {
-      const p = q.payload || {}, blocked = q.reasons.some(r => PROV.includes(r));
-      return `<div class="qcard"><div class="row"><span class="grow"><b>${esc(p.subject)}</b> = "${esc(p.value)}", claimed source <b>${esc(p.source_device)}</b></span>
-        <button data-qid="${esc(q.id)}" onclick="release('${id}', this.dataset.qid)" ${blocked ? "disabled title='Unproven authorship can never be released'" : ""}>Release</button></div>
-        <div class="row" style="margin-top:6px">${q.reasons.map(r => pill(PROV.includes(r) ? "quarantined" : "superseded", r)).join("")}</div>
-        ${q.evidence.length ? `<details style="margin-top:6px"><summary class="small muted">Evidence (${q.evidence.length})</summary>
-          <div class="small">${q.evidence.map(e => `<div><code>${esc(JSON.stringify(e))}</code></div>`).join("")}</div></details>` : ""}</div>`;
-    }).join("");
-  }
-  if (tab === "conflicts") {
-    if (!s.conflicts.length) return `<p class="muted">No conflicts yet. Two devices disagree on firmware; sync both to see it resolved.</p>`;
-    return s.conflicts.map(c => {
-      const entries = Object.entries(c.breakdown).sort((a, b) => b[1].score - a[1].score);
-      const max = Math.max(...entries.map(([, b]) => b.score), 0.0001);
-      return `<div class="ccard"><div><b>${esc(c.subject)}</b> resolved to ${pill("verified", c.winner)} <span class="small muted">after ${esc(c.trigger)}, ${clock(c.ts)}</span></div>
-        <table class="data" style="margin-top:6px"><tr><th>Value</th><th>Devices</th><th>Trust × decay × devices</th><th style="width:34%">Score</th></tr>
-        ${entries.map(([v, b]) => `<tr><td>${esc(v)}</td><td>${esc(b.devices.join(", "))}</td><td>${esc(b.formula)}</td>
-          <td><div class="row" style="flex-wrap:nowrap"><div style="flex:1"><div class="bar ${v === c.winner ? "win" : ""}" style="transform:scaleX(0)" data-w="${b.score / max}"></div></div><b>${b.score}</b></div></td></tr>`).join("")}</table></div>`;
-    }).join("");
-  }
-  if (tab === "write") {
-    return `<form class="row" onsubmit="write(event, '${id}')">
-        <input name="subject" aria-label="Subject" placeholder="Subject, e.g. dock3" required>
-        <input name="value" aria-label="Value" placeholder="Value" required>
-        <input class="grow" name="text" aria-label="Memory text" placeholder="What the device observed" required>
-        <select name="sensitivity" aria-label="Sensitivity"><option value="SYNC">Share on sync</option><option value="PRIVATE">Keep on device</option></select>
-        <button class="go">Sign and save</button></form>
-      <p class="small muted">Text with an email, phone number, ID number, card number or credential is kept on the device automatically.
-        A new value for an existing subject triggers conflict resolution.</p>`;
-  }
-  return s.log.map(e => { const { ts, event, ...rest } = e;
-    return `<div class="small"><span class="muted">${clock(ts)}</span> <b>${esc(event)}</b> <span class="muted">${esc(JSON.stringify(rest))}</span></div>`; }).join("");
-}
-
-// ---------------------------------------------------------------- benchmark (D3)
-function renderBench() {
-  const notes = document.getElementById("bench-notes"), chartEl = document.getElementById("bench-chart");
-  if (!bench || !bench.available) {
-    notes.innerHTML = `<p class="muted">No benchmark results yet. Run <code>python benchmark.py</code>.</p>`; return;
-  }
-  const rows = bench.scenarios.map(s => ({ name: s.name.replace(" (NO payload index)", ", no index"), plain: s.p50_ms,
-    scoped: s.scoped_p50_ms && s.name !== "no filter" ? s.scoped_p50_ms : null, noindex: /NO payload index/.test(s.name) }));
-  document.getElementById("bench-legend").innerHTML =
-    `<span><i class="swatch" style="background:var(--ink)"></i>Filter only, p50</span>
-     <span><i class="swatch" style="background:#8f9bb3"></i>With trust-scoped BM25 IDF</span>
-     <span><i class="swatch" style="background:var(--quarantine)"></i>Same filter, payload index dropped</span>`;
-  const W = 1100, rowH = 34, left = 330, right = 90, H = rows.length * rowH + 36;
-  chartEl.innerHTML = "";
-  const svg = d3.select(chartEl).append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img")
-    .attr("aria-label", "Search latency by filter, log scale");
-  const x = d3.scaleLog().domain([0.5, 2000]).range([left, W - right]);
-  svg.append("g").attr("transform", `translate(0,${H - 22})`)
-    .call(d3.axisBottom(x).tickValues([1, 10, 100, 1000]).tickFormat(d => `${d} ms`).tickSize(-(H - 30)))
-    .call(g => g.selectAll("line").attr("stroke", "rgba(20,33,61,.1)"))
-    .call(g => g.select(".domain").remove())
-    .call(g => g.selectAll("text").attr("fill", "#5f6a7e").style("font-size", "11px"));
-  const rowG = svg.selectAll("g.r").data(rows).join("g").attr("transform", (d, i) => `translate(0,${i * rowH + 6})`);
-  rowG.append("text").attr("x", left - 10).attr("y", 15).attr("text-anchor", "end").text(d => d.name)
-    .style("font-size", "13px").attr("fill", d => (d.noindex ? "var(--quarantine)" : "#3c4760"));
-  const grow = sel => sel.attr("width", 0).transition().duration(reduceMotion ? 0 : 900).delay((d, i) => (reduceMotion ? 0 : i * 60))
-    .ease(d3.easeCubicOut);
-  grow(rowG.append("rect").attr("x", left).attr("y", 2).attr("height", 12).attr("rx", 3)
-    .attr("fill", d => (d.noindex ? "var(--quarantine)" : "var(--ink)"))).attr("width", d => x(d.plain) - left);
-  grow(rowG.filter(d => d.scoped).append("rect").attr("x", left).attr("y", 16).attr("height", 6).attr("rx", 2).attr("fill", "#8f9bb3"))
-    .attr("width", d => x(d.scoped) - left);
-  rowG.append("text").attr("y", 13).attr("x", d => x(d.plain) + 6).text(d => `${d.plain} ms`).style("font-size", "11.5px")
-    .style("font-weight", 600).attr("fill", d => (d.noindex ? "var(--quarantine)" : "#14213d"));
-
-  const s = Object.fromEntries(bench.scenarios.map(r => [r.name, r]));
-  const trust = s["trust_status=verified"], none = s["no filter"];
-  const worst = bench.scenarios.filter(r => /NO payload index/.test(r.name)).map(r => {
-    const base = s[r.name.replace(" (NO payload index)", "")]; return Math.round(r.p50_ms / base.p50_ms); });
-  const fp = bench.device_footprint;
-  notes.innerHTML = `<ul class="findings">
-    <li>The trust filter adds <b>${(trust.p50_ms - none.p50_ms).toFixed(2)} ms</b> to a search over ${bench.n_points.toLocaleString()} memories.</li>
-    <li>Drop the payload indexes and the same selective filters get <b>${Math.min(...worst)}–${Math.max(...worst)}× slower</b>. The index is what makes the boundary cheap.</li>
-    <li>Scoping BM25's IDF to trusted memories costs <b>${(trust.scoped_p50_ms - trust.p50_ms).toFixed(1)} ms</b> and stops untrusted text from skewing term weights.</li>
-    <li>Filtered HNSW recall@10 against exact search: <b>${Math.min(...Object.values(bench.recall_at_10))}</b> or better.</li>
-    <li>Embedding the query takes <b>${bench.query_embed_ms.p50} ms</b>, more than the search itself.</li>
-    <li>A device holding the model and all ${bench.n_points.toLocaleString()} memories uses <b>${fp.rss_mb.after_100_queries} MB</b> of RAM;
-      the shard loads in ${fp.shard_load_s} s.</li>
-    <li>int8 quantization did not pay off here: recall fell to ${bench.int8 ? bench.int8.recall_trusted : "n/a"} and disk use grew.</li></ul>
-    <p class="small muted">Ingest: ${bench.seed.points_per_s} memories/s, limited by CPU embedding. ${esc(bench.machine)}.</p>`;
-}
-
-// ---------------------------------------------------------------- hub + status
-function renderHub() {
-  const el = document.getElementById("hub");
-  if (!hubState) { el.innerHTML = `<p class="muted">The hub is not reachable.</p>`; return; }
-  el.innerHTML = `<table class="data"><tr><th>Device</th><th>Trust</th><th>Pinned key</th><th>Registered</th></tr>
-    ${Object.entries(hubState.registry).map(([d, r]) => `<tr><td>${esc(d)}</td>
-      <td>${pill(r.trust_score >= 0.5 ? "verified" : "quarantined", r.trust_score)}</td><td><code>${esc(r.public_key.slice(0, 20))}</code></td>
-      <td class="muted">${clock(r.registered_at)}</td></tr>`).join("")}</table>
-    <p class="small muted">${hubState.log_size} memories in the append-only log. Devices it has never seen get trust
-      ${hubState.config.default_trust}; the screen rejects anything under 0.5.</p>`;
-}
-function renderStatus() {
-  const bits = [["hub", !!hubState], ...Object.keys(DEVICES).map(id => [id, !!states[id] && !states[id].offline])];
-  document.getElementById("status").innerHTML = bits.map(([n, ok]) => `<span><i class="dot ${ok ? "on" : "off"}"></i>${esc(n)} ${ok ? "online" : "offline"}</span>`).join("")
-    + `<span class="mock">Seed data is mock</span>`;
-}
-
-// ---------------------------------------------------------------- actions
-async function refresh() {
-  await Promise.all([
-    api(HUB, "/state").then(h => { hubState = h; }).catch(() => { hubState = null; }),
-    ...Object.entries(DEVICES).map(([id, base]) => api(base, "/api/state").then(s => { states[id] = s; }).catch(() => { states[id] = null; })),
-  ]);
-  const a = document.activeElement, typing = a && ["INPUT", "SELECT", "TEXTAREA"].includes(a.tagName);
-  for (const id of Object.keys(DEVICES)) {
-    if (!(typing && document.getElementById(`dev-${id}`).contains(a))) renderDevice(id);
-  }
-  renderStatus(); renderHub(); renderMatrix(); drawPipeline();
-}
-function setTab(id, t) { ui[id].tab = t; renderDevice(id); }
-async function toggleOffline(id, off) { await post(DEVICES[id], `/api/offline?offline=${off}`); await refresh(); }
-async function sync(id) {
-  const r = await post(DEVICES[id], "/api/sync");
-  const p = r.pull;
-  ui[id].lastSync = r.ok ? `Pushed ${r.pushed}. Pulled ${p.received}: ${p.promoted} promoted, ${p.corroborated} corroborated, ${p.conflicts} conflicts, ${p.quarantined} quarantined.`
-                         : r.reason;
-  await refresh(); return r;
-}
-async function runSearch(id, q, trusted) {
-  ui[id].trusted = trusted;
-  try { ui[id].search = { q, ...(await api(DEVICES[id], `/api/search?q=${encodeURIComponent(q)}&trusted_only=${trusted}`)) }; }
-  catch (e) { ui[id].search = { q, error: e.message }; }
-  renderDevice(id);
-}
-function search(ev, id) { ev.preventDefault(); runSearch(id, ev.target.q.value, ev.target.trusted.checked); }
-async function write(ev, id) {
-  ev.preventDefault(); const f = ev.target;
-  await api(DEVICES[id], "/api/write", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ subject: f.subject.value, value: f.value.value, text: f.text.value, sensitivity: f.sensitivity.value }) });
-  ui[id].tab = "memories"; await refresh();
-}
-async function release(id, qid) {
-  const r = await post(DEVICES[id], `/api/quarantine/${encodeURIComponent(qid)}/release`);
-  if (!r.ok) alert(r.reason);
-  ui[id].tab = "conflicts"; await refresh();
-}
-async function attack(mode) {
-  const r = await post(HUB, `/demo/attack/${mode}`);
-  if (!r.ok) alert(r.error);
-  await refresh();
-}
-
-// ---------------------------------------------------------------- guided demo
-const steps = [
-  ["Reset and load", async () => {
-    await post(HUB, "/demo/reset");
-    for (const b of Object.values(DEVICES)) { await post(b, "/api/reset"); await post(b, "/api/seed"); }
-    ui.robot.tab = "queue"; ui.kiosk.tab = "memories"; ui.robot.search = ui.kiosk.search = null; ui.robot.lastSync = ui.kiosk.lastSync = "";
-    return "Both devices now hold their own mock memories. Robot's sync queue shows the owner's email kept on the device: the PII check marked it private, so it can never be pushed.";
-  }],
-  ["Search offline", async () => {
-    for (const b of Object.values(DEVICES)) await post(b, "/api/offline?offline=true");
-    await runSearch("robot", "dock 3 charger fault", true); await runSearch("kiosk", "dock 3 charger fault", true);
-    return "Both devices are offline and still answer, using dense and BM25 search fused with RRF on their own shard. The bar under each search splits query embedding time from vector search time.";
-  }],
-  ["Go online and sync", async () => {
-    for (const b of Object.values(DEVICES)) await post(b, "/api/offline?offline=false");
-    await sync("robot"); await sync("kiosk"); await sync("robot");
-    ui.robot.tab = "memories"; ui.kiosk.tab = "conflicts";
-    return "Everything pulled went through staging and the screen. Dock 3 = broken is now agreed by both devices. The kiosk's conflicts tab shows firmware 2.3.1 against 2.3.0, and both devices pick the same winner from the same signed data.";
-  }],
-  ["Launch all attacks", async () => {
-    for (const m of Object.keys(catalog)) await post(HUB, `/demo/attack/${m}`);
-    await refresh();
-    return "Six poisoned memories are sitting in the hub. The hub does not screen anything, so nothing has been stopped yet.";
-  }],
-  ["Devices pull", async () => {
-    await sync("kiosk"); await sync("robot");
-    ui.robot.tab = "quarantine"; ui.kiosk.tab = "quarantine";
-    return "Every attack is quarantined, and the matrix shows which check caught it. The stolen-key attack has a valid signature from a trusted device and a renamed subject; only the semantic neighbor check catches it.";
-  }],
-  ["Remove the filter", async () => {
-    await runSearch("kiosk", "firmware version", false); await runSearch("robot", "firmware version", true);
-    return "Same shard, same query. With the filter off, the kiosk also sees the superseded firmware value; the robot, with the filter on, does not. The indexed trust_status filter is what keeps unverified memories out of every answer.";
-  }],
-];
-const done = new Set();
-function renderSteps(running) {
-  document.getElementById("steps").innerHTML = steps.map(([name], i) =>
-    `<button class="step ${done.has(i) ? "done" : ""} ${running === i ? "running" : ""}" onclick="runStep(${i})"><b>${i + 1}</b>${name}</button>`).join("");
-}
-async function runStep(i) {
-  const n = document.getElementById("narration");
-  renderSteps(i); n.textContent = `Running step ${i + 1}…`;
-  try { n.textContent = await steps[i][1](); done.add(i); }
-  catch (e) { n.textContent = `Step ${i + 1} failed: ${e.message}. Check that the services are running (python launch.py).`; }
-  renderSteps(); await refresh();
-}
-
-// ---------------------------------------------------------------- boot
-const io = "IntersectionObserver" in window ? new IntersectionObserver(entries => entries.forEach(e => {
-  if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-}), { threshold: 0.08 }) : null;
-document.querySelectorAll(".reveal").forEach(el => (io ? io.observe(el) : el.classList.add("in")));
-
-(async () => {
-  try { DEVICES = (await api(HUB, "/config")).devices; } catch { DEVICES = { robot: "http://127.0.0.1:8001", kiosk: "http://127.0.0.1:8002" }; }
-  try { catalog = await api(HUB, "/demo/attacks"); } catch { catalog = {}; }
-  try { bench = await api(Object.values(DEVICES)[0], "/api/benchmark"); } catch { bench = null; }
-  renderSteps(); renderBench(); await refresh();
-  setInterval(refresh, 3000);
-})();
-</script>
+<script src="static/app.js"></script>
 </body>
 </html>
