@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Engram Inspector</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, Segoe UI, sans-serif; background: #0f1115; color: #e6e8eb; margin: 0; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: #9aa3ad; font-size: 12px; margin-bottom: 16px; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; margin-left: 6px; }
+  .badge.mock { background: #5a3b00; color: #ffcf7a; }
+  .device-id { font-weight: 600; }
+  input, button { font: inherit; }
+  input[type=text] { background: #1a1d24; border: 1px solid #333844; color: #e6e8eb; padding: 6px 8px; border-radius: 4px; }
+  button { background: #2b6cb0; border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+  button.danger { background: #a83244; }
+  button.ghost { background: #333844; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .panel { background: #171a21; border: 1px solid #262a33; border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+  .panel h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #9aa3ad; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td, th { padding: 4px 6px; border-bottom: 1px solid #262a33; text-align: left; vertical-align: top; }
+  .tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; }
+  .tag.verified { background: #14432a; color: #6fd69a; }
+  .tag.quarantined { background: #4a1420; color: #ff8a9a; }
+  .tag.pending { background: #443a14; color: #ffd27a; }
+  .tag.private { background: #2a2d36; color: #c3c9d1; }
+  .tag.sync { background: #1a3344; color: #7ac0ff; }
+  code { font-size: 11px; color: #8fa3bf; }
+  .muted { color: #6b7380; font-size: 11px; }
+  .log-line { font-family: monospace; font-size: 11px; padding: 2px 0; border-bottom: 1px dotted #262a33; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .score-breakdown { font-size: 11px; color: #9aa3ad; }
+</style>
+</head>
+<body>
+  <h1>Engram — tamper-proof edge memory <span class="badge mock">robot/kiosk data is MOCK</span></h1>
+  <div class="sub">Trust boundary is a payload filter (trust_status=verified) applied to every search. Poison screening happens on the device pulling data, not on the hub.</div>
+
+  <div class="cols">
+    <div id="panel-robot" class="device"></div>
+    <div id="panel-kiosk" class="device"></div>
+  </div>
+
+<script>
+const DEVICES = [
+  { id: "robot", base: "http://127.0.0.1:8001" },
+  { id: "kiosk", base: "http://127.0.0.1:8002" },
+];
+
+function tag(cls, text) { return `<span class="tag ${cls}">${text}</span>`; }
+
+function renderMemories(mems) {
+  if (!mems.length) return '<div class="muted">no memories</div>';
+  return `<table><tr><th>subject</th><th>value</th><th>status</th><th>sens</th><th>corrob</th></tr>` +
+    mems.map(m => `<tr>
+      <td>${m.subject}</td>
+      <td>${m.value}</td>
+      <td>${tag(m.trust_status, m.trust_status)}</td>
+      <td>${tag(m.sensitivity.toLowerCase(), m.sensitivity)}</td>
+      <td class="muted">${(m.corroborated_by||[]).join(', ')}</td>
+    </tr>`).join('') + `</table>`;
+}
+
+function renderQuarantine(items) {
+  if (!items.length) return '<div class="muted">empty</div>';
+  return items.map(q => `<div class="log-line">
+    <b>${q.payload.subject}</b> = "${q.payload.value}" from <code>${q.payload.source_device}</code>
+    <div class="muted">reasons: ${q.reasons.join(', ')}</div>
+  </div>`).join('');
+}
+
+function renderLog(log) {
+  return log.slice().reverse().slice(0, 40).map(e => {
+    const t = new Date(e.ts * 1000).toLocaleTimeString();
+    const { ts, event, ...rest } = e;
+    return `<div class="log-line">[${t}] <b>${event}</b> ${JSON.stringify(rest)}</div>`;
+  }).join('');
+}
+
+function renderSearch(res) {
+  if (!res) return '';
+  if (!res.results.length) return `<div class="muted">no hits (${res.latency_ms}ms)</div>`;
+  return `<div class="muted">latency: ${res.latency_ms}ms</div><table>` +
+    res.results.map(r => `<tr><td>${r.score.toFixed(3)}</td><td>${r.payload.subject}</td><td>${r.payload.value}</td><td class="muted">${r.payload.text}</td></tr>`).join('') +
+    `</table>`;
+}
+
+async function refresh(dev) {
+  const state = await fetch(`${dev.base}/api/state`).then(r => r.json());
+  const el = document.getElementById(`panel-${dev.id}`);
+  el.innerHTML = `
+    <div class="panel">
+      <div class="row">
+        <span class="device-id">${dev.id}</span>
+        ${state.offline ? tag('quarantined', 'OFFLINE') : tag('verified', 'ONLINE')}
+        <button class="ghost" onclick="toggleOffline('${dev.id}', ${!state.offline})">${state.offline ? 'go online' : 'go offline'}</button>
+        <button onclick="sync('${dev.id}')">sync now</button>
+        <button class="danger" onclick="attack('${dev.id}')">inject attack</button>
+      </div>
+      <div class="row">
+        <input type="text" id="search-${dev.id}" placeholder="search..." />
+        <button onclick="search('${dev.id}')">search</button>
+      </div>
+      <div id="search-result-${dev.id}"></div>
+    </div>
+    <div class="panel"><h3>trusted memories (${state.memories.length})</h3>${renderMemories(state.memories)}</div>
+    <div class="panel"><h3>quarantine (${state.quarantine.length})</h3>${renderQuarantine(state.quarantine)}</div>
+    <div class="panel"><h3>activity log</h3>${renderLog(state.log)}</div>
+  `;
+}
+
+async function toggleOffline(id, offline) {
+  const dev = DEVICES.find(d => d.id === id);
+  await fetch(`${dev.base}/api/offline?offline=${offline}`, { method: 'POST' });
+  refresh(dev);
+}
+
+async function sync(id) {
+  const dev = DEVICES.find(d => d.id === id);
+  await fetch(`${dev.base}/api/sync`, { method: 'POST' });
+  refreshAll();
+}
+
+async function search(id) {
+  const dev = DEVICES.find(d => d.id === id);
+  const q = document.getElementById(`search-${id}`).value;
+  if (!q) return;
+  const res = await fetch(`${dev.base}/api/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+  document.getElementById(`search-result-${id}`).innerHTML = renderSearch(res);
+}
+
+async function attack(id) {
+  const dev = DEVICES.find(d => d.id === id);
+  await fetch(`${dev.base}/api/attack`, { method: 'POST' });
+  refreshAll();
+}
+
+function refreshAll() { DEVICES.forEach(refresh); }
+
+refreshAll();
+setInterval(refreshAll, 4000);
+</script>
+</body>
+</html>
