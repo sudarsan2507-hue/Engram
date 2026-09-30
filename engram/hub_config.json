@@ -1,0 +1,4 @@
+{
+  "trust_scores": {"robot": 0.9, "kiosk": 0.8},
+  "default_trust": 0.3
+}

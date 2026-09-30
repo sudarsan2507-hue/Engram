@@ -1,33 +1,28 @@
-"""Thin REST client a Device uses to talk to the hub."""
+"""REST client a device uses to reach the hub. Accepts any httpx-compatible
+client (e.g. FastAPI's TestClient) so tests can run hub + devices in-process."""
 import httpx
 
 
 class HubClient:
-    def __init__(self, base_url: str):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str = "", client=None):
+        self.http = client or httpx.Client(base_url=base_url.rstrip("/"), timeout=15)
 
-    def register(self, device_id: str, public_key: str, trust_score: float = 0.8):
-        httpx.post(
-            f"{self.base_url}/register",
-            json={"device_id": device_id, "public_key": public_key, "trust_score": trust_score},
-            timeout=5,
-        ).raise_for_status()
+    def register(self, device_id: str, public_key: str) -> dict:
+        r = self.http.post("/register", json={"device_id": device_id, "public_key": public_key})
+        r.raise_for_status()
+        return r.json()
 
     def registry(self) -> dict:
-        r = httpx.get(f"{self.base_url}/registry", timeout=5)
+        r = self.http.get("/registry")
         r.raise_for_status()
         return r.json()
 
-    def push(self, device_id: str, public_key: str, memories: list[dict]):
-        r = httpx.post(
-            f"{self.base_url}/push",
-            json={"device_id": device_id, "public_key": public_key, "memories": memories},
-            timeout=10,
-        )
+    def push(self, device_id: str, memories: list[dict]) -> dict:
+        r = self.http.post("/push", json={"device_id": device_id, "memories": memories})
         r.raise_for_status()
         return r.json()
 
-    def pull(self, exclude_device: str) -> list[dict]:
-        r = httpx.get(f"{self.base_url}/pull", params={"exclude_device": exclude_device}, timeout=10)
+    def pull(self, since: int, exclude_device: str) -> dict:
+        r = self.http.get("/pull", params={"since": since, "exclude_device": exclude_device})
         r.raise_for_status()
         return r.json()
