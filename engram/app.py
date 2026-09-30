@@ -5,7 +5,6 @@ import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .device import Device, OfflineError
@@ -13,7 +12,6 @@ from .hub_client import HubClient
 from .schema import SYNC
 
 DEFAULT_DATA_ROOT = os.path.join(os.path.dirname(__file__), "..", "data")
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed_data")
 BENCH_RESULTS = os.path.join(os.path.dirname(__file__), "..", "bench_results.json")
 
@@ -47,10 +45,6 @@ def create_device_app(device_id: str, data_root: str, hub_url: str) -> FastAPI:
         return len(items)
 
     app.state.device, app.state.register, app.state.seed = device, register, seed
-
-    @app.get("/")
-    def index():
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
     @app.get("/health")
     def health():

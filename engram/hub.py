@@ -14,6 +14,7 @@ import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import attacks
@@ -34,6 +35,7 @@ class HubState:
         self.log: list[dict] = []
         self.ids: set[str] = set()
         self.events: list[dict] = []
+        self.attacks: list[dict] = []
 
     def trust_for(self, device_id: str) -> float:
         return self.config["trust_scores"].get(device_id, self.config["default_trust"])
@@ -76,6 +78,7 @@ class HubState:
 state = HubState()
 app = FastAPI(title="Engram Hub")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class RegisterRequest(BaseModel):
@@ -140,6 +143,7 @@ def hub_state():
                  "sensitivity": e["memory"].get("sensitivity") if isinstance(e["memory"], dict) else None}
                 for e in state.log[-60:]][::-1],
         "events": state.events[-40:][::-1],
+        "attacks": state.attacks,
         "config": state.config,
     }
 
@@ -157,6 +161,9 @@ def run_attack(mode: str):
         raise HTTPException(404, f"unknown attack '{mode}'")
     result = attacks.run(mode, state)
     state.event("attack", **{k: v for k, v in result.items() if k != "payload"})
+    if result.get("ok"):
+        state.attacks.append({"mode": mode, "title": attacks.CATALOG[mode]["title"], "id": result["payload"]["id"],
+                              "source_device": result["payload"]["source_device"], "ts": int(time.time() * 1000)})
     return result
 
 

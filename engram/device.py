@@ -232,6 +232,8 @@ class Device:
                 shard_ops.delete(self.staging, [m.id for m in memories])
 
             self._kv_set("last_pull_seq", batch["next_since"])
+            flow = self._kv_get("flow", {})
+            self._kv_set("flow", {k: flow.get(k, 0) + v for k, v in summary.items()})
             self._log("pull", since=since, **summary)
             return summary
 
@@ -362,6 +364,7 @@ class Device:
                 "public_key": self.public_key,
                 "offline": self.offline,
                 "stats": self.stats(),
+                "flow": self._kv_get("flow", {}),
                 "memories": memories,
                 "sync_queue": self.sync_queue(),
                 "held_back": self.held_back(),
