@@ -1,146 +1,336 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Engram Inspector</title>
 <style>
-  :root { color-scheme: dark; }
-  body { font-family: -apple-system, Segoe UI, sans-serif; background: #0f1115; color: #e6e8eb; margin: 0; padding: 16px; }
-  h1 { font-size: 18px; margin: 0 0 4px; }
-  .sub { color: #9aa3ad; font-size: 12px; margin-bottom: 16px; }
-  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; margin-left: 6px; }
-  .badge.mock { background: #5a3b00; color: #ffcf7a; }
-  .device-id { font-weight: 600; }
-  input, button { font: inherit; }
-  input[type=text] { background: #1a1d24; border: 1px solid #333844; color: #e6e8eb; padding: 6px 8px; border-radius: 4px; }
-  button { background: #2b6cb0; border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-  button.danger { background: #a83244; }
-  button.ghost { background: #333844; }
-  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-  .panel { background: #171a21; border: 1px solid #262a33; border-radius: 6px; padding: 10px; margin-bottom: 10px; }
-  .panel h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #9aa3ad; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  td, th { padding: 4px 6px; border-bottom: 1px solid #262a33; text-align: left; vertical-align: top; }
-  .tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; }
-  .tag.verified { background: #14432a; color: #6fd69a; }
-  .tag.quarantined { background: #4a1420; color: #ff8a9a; }
-  .tag.pending { background: #443a14; color: #ffd27a; }
-  .tag.private { background: #2a2d36; color: #c3c9d1; }
-  .tag.sync { background: #1a3344; color: #7ac0ff; }
-  code { font-size: 11px; color: #8fa3bf; }
-  .muted { color: #6b7380; font-size: 11px; }
-  .log-line { font-family: monospace; font-size: 11px; padding: 2px 0; border-bottom: 1px dotted #262a33; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .score-breakdown { font-size: 11px; color: #9aa3ad; }
+  :root {
+    --bg: #0d1016; --panel: #151a22; --panel2: #1b212b; --line: #273040; --text: #e4e8ee; --muted: #8c96a5;
+    --accent: #5b9dff; --ok: #3fbf7f; --okbg: #12301f; --bad: #ff6b7d; --badbg: #3a1720; --warn: #f0b64b;
+    --warnbg: #3a2d10; --neutralbg: #232a36;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 18px; margin: 0; }
+  h1 small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 8px; }
+  .pitch { color: var(--muted); margin: 4px 0 0; max-width: 980px; }
+  main { padding: 14px 20px 40px; display: grid; gap: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; display: flex; gap: 8px; align-items: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 1100px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel2); color: var(--text); padding: 5px 11px; border-radius: 6px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { background: var(--badbg); border-color: #6b2635; color: var(--bad); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input, select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; min-width: 0; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--neutralbg); color: var(--muted); white-space: nowrap; }
+  .tag.ok { background: var(--okbg); color: var(--ok); } .tag.bad { background: var(--badbg); color: var(--bad); }
+  .tag.warn { background: var(--warnbg); color: var(--warn); } .tag.info { background: #14263f; color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; }
+  td, th { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .muted { color: var(--muted); } .mono { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 10px 0 8px; flex-wrap: wrap; }
+  .tabs button { border: none; border-radius: 6px 6px 0 0; background: none; color: var(--muted); padding: 6px 10px; }
+  .tabs button.on { color: var(--text); background: var(--panel2); }
+  .stats { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .stat { background: var(--panel2); border-radius: 6px; padding: 4px 9px; }
+  .stat b { font-size: 15px; margin-right: 4px; }
+  .scroll { max-height: 340px; overflow: auto; }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .card h3 { margin: 0; font-size: 13px; }
+  .reason { display: inline-block; margin: 2px 4px 2px 0; }
+  .stepper { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .stepper button.done { border-color: var(--ok); color: var(--ok); }
+  .narration { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--panel2); border-radius: 0 6px 6px 0; }
+  .timing { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); margin: 4px 0; }
+  .timing span { display: block; height: 100%; }
+  .notice { font-size: 12px; color: var(--muted); }
+  details summary { cursor: pointer; color: var(--muted); }
+  .formula { font-family: ui-monospace, Consolas, monospace; }
 </style>
 </head>
 <body>
-  <h1>Engram — tamper-proof edge memory <span class="badge mock">robot/kiosk data is MOCK</span></h1>
-  <div class="sub">Trust boundary is a payload filter (trust_status=verified) applied to every search. Poison screening happens on the device pulling data, not on the hub.</div>
+<header>
+  <h1>Engram <small>tamper-proof edge memory on Qdrant Edge</small> <span class="tag warn">robot/kiosk data is MOCK</span></h1>
+  <p class="pitch">Each device searches its own EdgeShard offline. Sync is where trust is decided: pulled memories land in a
+    staging shard, pass a poison screen (signature, pinned key, trust, corroboration, semantic neighbors), and only then
+    reach the trusted shard. Every search runs with the payload filter <span class="mono">trust_status = verified</span> &mdash;
+    the filter is the security boundary.</p>
+</header>
+<main>
+  <section class="panel">
+    <h2>Guided demo</h2>
+    <div class="stepper" id="stepper"></div>
+    <div class="narration" id="narration">Click step 1. Each step calls the real APIs; watch the device panels below.</div>
+  </section>
 
-  <div class="cols">
-    <div id="panel-robot" class="device"></div>
-    <div id="panel-kiosk" class="device"></div>
-  </div>
+  <section class="panel">
+    <h2>Attacks <span class="tag bad">demo control plane</span></h2>
+    <div class="grid3" id="attacks"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel" id="dev-robot"></div>
+    <div class="panel" id="dev-kiosk"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel"><h2>Hub registry <span class="tag">untrusted relay</span></h2><div id="hub"></div></div>
+    <div class="panel"><h2>Benchmark <span class="tag">measured, not estimated</span></h2><div id="bench"></div></div>
+  </section>
+</main>
 
 <script>
-const DEVICES = [
-  { id: "robot", base: "http://127.0.0.1:8001" },
-  { id: "kiosk", base: "http://127.0.0.1:8002" },
-];
+const HUB = location.port === "8000" || location.protocol === "file:" ? "http://127.0.0.1:8000" : `${location.protocol}//${location.hostname}:8000`;
+const DEVICES = { robot: "http://127.0.0.1:8001", kiosk: "http://127.0.0.1:8002" };
+const ui = { robot: { tab: "memories", trusted: true, search: null, lastSync: null },
+             kiosk: { tab: "memories", trusted: true, search: null, lastSync: null } };
+const attackResults = {};
+let states = {};
 
-function tag(cls, text) { return `<span class="tag ${cls}">${text}</span>`; }
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const tag = (cls, text) => `<span class="tag ${cls}">${esc(text)}</span>`;
+const time = ms => new Date(ms).toLocaleTimeString();
+const PROVENANCE = ["unregistered_device", "registry_key_mismatch", "invalid_or_missing_signature", "private_memory_on_the_wire", "malformed_payload"];
 
-function renderMemories(mems) {
-  if (!mems.length) return '<div class="muted">no memories</div>';
-  return `<table><tr><th>subject</th><th>value</th><th>status</th><th>sens</th><th>corrob</th></tr>` +
-    mems.map(m => `<tr>
-      <td>${m.subject}</td>
-      <td>${m.value}</td>
-      <td>${tag(m.trust_status, m.trust_status)}</td>
-      <td>${tag(m.sensitivity.toLowerCase(), m.sensitivity)}</td>
-      <td class="muted">${(m.corroborated_by||[]).join(', ')}</td>
-    </tr>`).join('') + `</table>`;
+async function api(base, path, opts = {}) {
+  const r = await fetch(base + path, opts);
+  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+  return r.json();
 }
+const post = (base, path) => api(base, path, { method: "POST" });
 
-function renderQuarantine(items) {
-  if (!items.length) return '<div class="muted">empty</div>';
-  return items.map(q => `<div class="log-line">
-    <b>${q.payload.subject}</b> = "${q.payload.value}" from <code>${q.payload.source_device}</code>
-    <div class="muted">reasons: ${q.reasons.join(', ')}</div>
-  </div>`).join('');
-}
+function statusTag(s) { return s === "verified" ? tag("ok", s) : s === "superseded" ? tag("warn", s) : tag("bad", s); }
 
-function renderLog(log) {
-  return log.slice().reverse().slice(0, 40).map(e => {
-    const t = new Date(e.ts * 1000).toLocaleTimeString();
-    const { ts, event, ...rest } = e;
-    return `<div class="log-line">[${t}] <b>${event}</b> ${JSON.stringify(rest)}</div>`;
-  }).join('');
-}
-
-function renderSearch(res) {
-  if (!res) return '';
-  if (!res.results.length) return `<div class="muted">no hits (${res.latency_ms}ms)</div>`;
-  return `<div class="muted">latency: ${res.latency_ms}ms</div><table>` +
-    res.results.map(r => `<tr><td>${r.score.toFixed(3)}</td><td>${r.payload.subject}</td><td>${r.payload.value}</td><td class="muted">${r.payload.text}</td></tr>`).join('') +
-    `</table>`;
-}
-
-async function refresh(dev) {
-  const state = await fetch(`${dev.base}/api/state`).then(r => r.json());
-  const el = document.getElementById(`panel-${dev.id}`);
+// ---------------- device panels ----------------
+function renderDevice(id) {
+  const s = states[id], u = ui[id], el = document.getElementById(`dev-${id}`);
+  if (!s) { el.innerHTML = `<h2>${id}</h2><div class="muted">unreachable &mdash; is <span class="mono">python launch.py</span> running?</div>`; return; }
+  const st = s.stats;
   el.innerHTML = `
-    <div class="panel">
-      <div class="row">
-        <span class="device-id">${dev.id}</span>
-        ${state.offline ? tag('quarantined', 'OFFLINE') : tag('verified', 'ONLINE')}
-        <button class="ghost" onclick="toggleOffline('${dev.id}', ${!state.offline})">${state.offline ? 'go online' : 'go offline'}</button>
-        <button onclick="sync('${dev.id}')">sync now</button>
-        <button class="danger" onclick="attack('${dev.id}')">inject attack</button>
-      </div>
-      <div class="row">
-        <input type="text" id="search-${dev.id}" placeholder="search..." />
-        <button onclick="search('${dev.id}')">search</button>
-      </div>
-      <div id="search-result-${dev.id}"></div>
+    <h2>${esc(id)} ${s.offline ? tag("bad", "OFFLINE") : tag("ok", "ONLINE")}
+      <span class="mono muted" title="Ed25519 public key">key ${esc(s.public_key.slice(0, 10))}&hellip;</span></h2>
+    <div class="row">
+      <button onclick="toggleOffline('${id}', ${!s.offline})">${s.offline ? "Go online" : "Go offline"}</button>
+      <button class="primary" onclick="sync('${id}')" ${s.offline ? "disabled" : ""}>Sync (push + pull)</button>
+      <span class="notice" id="sync-${id}">${u.lastSync ? esc(u.lastSync) : ""}</span>
     </div>
-    <div class="panel"><h3>trusted memories (${state.memories.length})</h3>${renderMemories(state.memories)}</div>
-    <div class="panel"><h3>quarantine (${state.quarantine.length})</h3>${renderQuarantine(state.quarantine)}</div>
-    <div class="panel"><h3>activity log</h3>${renderLog(state.log)}</div>
-  `;
+    <div class="stats">
+      <span class="stat"><b>${st.verified}</b>verified</span>
+      <span class="stat"><b>${st.superseded}</b>superseded</span>
+      <span class="stat"><b>${s.quarantine.length}</b>quarantined</span>
+      <span class="stat"><b>${st.private}</b>private</span>
+      <span class="stat"><b>${st.from_peers}</b>from peers</span>
+    </div>
+    <form class="row" onsubmit="search(event, '${id}')">
+      <input class="grow" name="q" placeholder="Hybrid search (dense + BM25, RRF)" value="${esc(u.search?.q || "")}">
+      <label class="muted"><input type="checkbox" name="trusted" ${u.trusted ? "checked" : ""}> trust filter</label>
+      <button>Search</button>
+    </form>
+    <div id="search-${id}">${renderSearch(u.search)}</div>
+    <div class="tabs">${["memories", "sync queue", "quarantine", "conflicts", "add memory", "log"].map(t =>
+      `<button class="${u.tab === t ? "on" : ""}" onclick="setTab('${id}', '${t}')">${t}${t === "quarantine" && s.quarantine.length ? ` (${s.quarantine.length})` : ""}${t === "conflicts" && s.conflicts.length ? ` (${s.conflicts.length})` : ""}</button>`).join("")}</div>
+    <div class="scroll">${renderTab(id, s, u.tab)}</div>`;
 }
 
-async function toggleOffline(id, offline) {
-  const dev = DEVICES.find(d => d.id === id);
-  await fetch(`${dev.base}/api/offline?offline=${offline}`, { method: 'POST' });
-  refresh(dev);
+function renderSearch(r) {
+  if (!r) return "";
+  if (r.error) return `<div class="tag bad">${esc(r.error)}</div>`;
+  const total = r.embed_ms + r.search_ms;
+  return `
+    <div class="notice" style="margin-top:6px">
+      ${r.results.length} hits &middot; query embedding <b>${r.embed_ms} ms</b> + vector search <b>${r.search_ms} ms</b>
+      &middot; filter: <span class="mono">${r.filter ? "trust_status = verified" : "NONE (unsafe view)"}</span>
+    </div>
+    <div class="timing" title="embedding vs search time"><span style="width:${100 * r.embed_ms / total}%;background:#7a5cff"></span><span style="width:${100 * r.search_ms / total}%;background:var(--accent)"></span></div>
+    <table><tr><th>RRF</th><th>subject</th><th>value</th><th>status</th><th>text</th></tr>
+    ${r.results.map(h => `<tr><td class="mono">${h.score.toFixed(3)}</td><td>${esc(h.payload.subject)}</td><td>${esc(h.payload.value)}</td>
+      <td>${statusTag(h.payload.trust_status)}</td><td class="muted">${esc(h.payload.text)}</td></tr>`).join("")}</table>`;
 }
 
+function renderTab(id, s, t) {
+  if (t === "memories") {
+    return `<table><tr><th>subject</th><th>value</th><th>status</th><th>sens.</th><th>source</th><th>corroborated by</th><th>sig</th></tr>
+      ${s.memories.map(m => `<tr><td>${esc(m.subject)}</td><td>${esc(m.value)}</td><td>${statusTag(m.trust_status)}</td>
+        <td>${m.sensitivity === "PRIVATE" ? tag("warn", "PRIVATE") : tag("info", "SYNC")}</td><td>${esc(m.source_device)}</td>
+        <td>${esc((m.corroborated_by || []).join(", "))}</td><td>${m.sig_valid ? tag("ok", "valid") : tag("bad", "INVALID")}</td></tr>`).join("")}</table>`;
+  }
+  if (t === "sync queue") {
+    const q = s.sync_queue.map(m => `<tr><td>${esc(m.subject)}</td><td>${tag("info", "will push")}</td><td class="muted">${esc(m.route_reason)}</td></tr>`);
+    const h = s.held_back.map(m => `<tr><td>${esc(m.subject)}</td><td>${tag("warn", "held on device")}</td><td class="muted">${esc(m.route_reason)}</td></tr>`);
+    return `<div class="notice">Queue = filter <span class="mono">source_device=${esc(id)} AND sensitivity=SYNC AND ts &gt; last_push</span>. PRIVATE cannot match it.</div>
+      <table><tr><th>subject</th><th>route</th><th>reason</th></tr>${q.concat(h).join("") || `<tr><td colspan=3 class="muted">nothing pending</td></tr>`}</table>`;
+  }
+  if (t === "quarantine") {
+    if (!s.quarantine.length) return `<div class="muted">empty</div>`;
+    return s.quarantine.map(q => {
+      const p = q.payload || {}, blocked = q.reasons.some(r => PROVENANCE.includes(r));
+      return `<div class="card" style="margin-bottom:8px">
+        <div class="row"><b>${esc(p.subject)}</b> = &ldquo;${esc(p.value)}&rdquo; <span class="muted">claimed source</span> ${esc(p.source_device)}
+          <span class="grow"></span><button data-qid="${esc(q.id)}" onclick="release('${id}', this.dataset.qid)" ${blocked ? "disabled title='provenance failures are never releasable'" : ""}>Release</button></div>
+        <div>${q.reasons.map(r => `<span class="reason">${tag(PROVENANCE.includes(r) ? "bad" : "warn", r)}</span>`).join("")}</div>
+        ${q.evidence.length ? `<details><summary>evidence (${q.evidence.length})</summary><div class="mono muted">${q.evidence.map(e => esc(JSON.stringify(e))).join("<br>")}</div></details>` : ""}
+      </div>`;
+    }).join("");
+  }
+  if (t === "conflicts") {
+    if (!s.conflicts.length) return `<div class="muted">no conflicts resolved yet</div>`;
+    return s.conflicts.map(c => `<div class="card" style="margin-bottom:8px">
+      <div><b>${esc(c.subject)}</b> &rarr; winner ${tag("ok", c.winner)} <span class="muted">${esc(c.trigger)} &middot; ${time(c.ts)}</span></div>
+      <table><tr><th>value</th><th>devices</th><th class="formula">avg_trust &times; decay &times; n</th><th>score</th></tr>
+      ${Object.entries(c.breakdown).sort((a, b) => b[1].score - a[1].score).map(([v, b]) => `<tr><td>${esc(v)}</td><td>${esc(b.devices.join(", "))}</td>
+        <td class="formula">${esc(b.formula)}</td><td><b>${b.score}</b></td></tr>`).join("")}</table></div>`).join("");
+  }
+  if (t === "add memory") {
+    return `<form class="row" onsubmit="write(event, '${id}')">
+      <input name="subject" placeholder="subject (e.g. dock3)" required>
+      <input name="value" placeholder="value" required>
+      <input class="grow" name="text" placeholder="memory text" required>
+      <select name="sensitivity"><option>SYNC</option><option>PRIVATE</option></select>
+      <button class="primary">Write + sign</button></form>
+      <div class="notice" style="margin-top:6px">Text containing an email, phone, SSN, card number or credential is forced to PRIVATE by the router.
+      Writing a different value for an existing subject triggers conflict resolution.</div>`;
+  }
+  return s.log.map(e => { const { ts, event, ...rest } = e;
+    return `<div class="mono"><span class="muted">${time(ts)}</span> <b>${esc(event)}</b> ${esc(JSON.stringify(rest))}</div>`; }).join("");
+}
+
+// ---------------- actions ----------------
+async function refresh() {
+  await Promise.all(Object.entries(DEVICES).map(async ([id, base]) => {
+    try { states[id] = await api(base, "/api/state"); } catch { states[id] = null; }
+    const a = document.activeElement, typing = a && ["INPUT", "SELECT", "TEXTAREA"].includes(a.tagName);
+    if (!typing || !document.getElementById(`dev-${id}`).contains(a)) renderDevice(id);
+  }));
+  renderHub();
+}
+function setTab(id, t) { ui[id].tab = t; renderDevice(id); }
+async function toggleOffline(id, off) { await post(DEVICES[id], `/api/offline?offline=${off}`); await refresh(); }
 async function sync(id) {
-  const dev = DEVICES.find(d => d.id === id);
-  await fetch(`${dev.base}/api/sync`, { method: 'POST' });
-  refreshAll();
+  const r = await post(DEVICES[id], "/api/sync");
+  ui[id].lastSync = r.ok ? `pushed ${r.pushed}, pulled ${r.pull.received}: ${r.pull.promoted} promoted, ${r.pull.corroborated} corroborated, ${r.pull.conflicts} conflicts, ${r.pull.quarantined} quarantined`
+                         : r.reason;
+  await refresh(); return r;
+}
+async function runSearch(id, q, trusted) {
+  ui[id].trusted = trusted;
+  try { ui[id].search = { q, ...(await api(DEVICES[id], `/api/search?q=${encodeURIComponent(q)}&trusted_only=${trusted}`)) }; }
+  catch (e) { ui[id].search = { q, error: e.message }; }
+  renderDevice(id);
+}
+function search(ev, id) { ev.preventDefault(); const f = ev.target; runSearch(id, f.q.value, f.trusted.checked); }
+async function write(ev, id) {
+  ev.preventDefault(); const f = ev.target;
+  await api(DEVICES[id], "/api/write", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subject: f.subject.value, value: f.value.value, text: f.text.value, sensitivity: f.sensitivity.value }) });
+  ui[id].tab = "memories"; await refresh();
+}
+async function release(id, qid) {
+  const r = await post(DEVICES[id], `/api/quarantine/${encodeURIComponent(qid)}/release`);
+  if (!r.ok) alert(r.reason); ui[id].tab = "conflicts"; await refresh();
 }
 
-async function search(id) {
-  const dev = DEVICES.find(d => d.id === id);
-  const q = document.getElementById(`search-${id}`).value;
-  if (!q) return;
-  const res = await fetch(`${dev.base}/api/search?q=${encodeURIComponent(q)}`).then(r => r.json());
-  document.getElementById(`search-result-${id}`).innerHTML = renderSearch(res);
+// ---------------- attacks + hub ----------------
+let catalog = {};
+async function loadAttacks() {
+  try { catalog = await api(HUB, "/demo/attacks"); } catch { catalog = {}; }
+  renderAttacks();
+}
+function renderAttacks() {
+  document.getElementById("attacks").innerHTML = Object.entries(catalog).map(([mode, a]) => `
+    <div class="card"><h3>${esc(a.title)}</h3><div>${tag("info", a.layer)}</div><div class="muted">${esc(a.story)}</div>
+      <div class="row"><button class="danger" onclick="attack('${mode}')">Launch</button>
+      <span class="notice">${attackResults[mode] ? esc(attackResults[mode]) : ""}</span></div></div>`).join("")
+    || `<div class="muted">hub unreachable</div>`;
+}
+async function attack(mode) {
+  const r = await post(HUB, `/demo/attack/${mode}`);
+  attackResults[mode] = r.ok ? `injected ${r.payload.subject}="${r.payload.value}" as ${r.payload.source_device}. ${r.notes.join(" ")} Now sync a device.` : r.error;
+  renderAttacks(); await refresh();
+}
+async function renderHub() {
+  let h; try { h = await api(HUB, "/state"); } catch { document.getElementById("hub").innerHTML = `<div class="muted">unreachable</div>`; return; }
+  document.getElementById("hub").innerHTML = `
+    <table><tr><th>device</th><th>trust (static config)</th><th>pinned key</th></tr>
+    ${Object.entries(h.registry).map(([d, r]) => `<tr><td>${esc(d)}</td><td>${r.trust_score >= 0.5 ? tag("ok", r.trust_score) : tag("bad", r.trust_score)}</td>
+      <td class="mono">${esc(r.public_key.slice(0, 16))}&hellip;</td></tr>`).join("")}</table>
+    <div class="notice" style="margin:8px 0">Append-only log: ${h.log_size} memories. Unknown devices get trust ${h.config.default_trust}; screen threshold is 0.5.</div>
+    <details><summary>hub events (${h.events.length})</summary><div class="mono">${h.events.map(e => { const { ts, event, ...r } = e;
+      return `<div><span class="muted">${time(ts)}</span> <b>${esc(event)}</b> ${esc(JSON.stringify(r))}</div>`; }).join("")}</div></details>`;
+}
+async function renderBench() {
+  const el = document.getElementById("bench");
+  let b; try { b = await api(DEVICES.robot, "/api/benchmark"); } catch { el.innerHTML = `<div class="muted">unavailable</div>`; return; }
+  if (!b.available) { el.innerHTML = `<div class="muted">Run <span class="mono">python benchmark.py</span> to populate.</div>`; return; }
+  const rows = b.scenarios.map(s => `<tr><td>${esc(s.name)}</td><td class="muted">${s.selectivity == null ? "&ndash;" : (100 * s.selectivity).toFixed(1) + "%"}</td>
+    <td class="mono">${s.p50_ms} / ${s.p95_ms}</td><td class="mono">${s.scoped_p50_ms != null ? `${s.scoped_p50_ms} / ${s.scoped_p95_ms}` : "&ndash;"}</td></tr>`).join("");
+  el.innerHTML = `<div class="notice">${b.n_points.toLocaleString()} points &middot; seeded in ${b.seed.total_s}s
+      (${b.seed.points_per_s} pts/s, batched) &middot; HNSW build ${b.seed.optimize_s}s &middot; query embedding p50 ${b.query_embed_ms.p50} ms</div>
+    <table style="margin-top:6px"><tr><th>filter (vector search only)</th><th>passes</th><th>filter only p50/p95 ms</th><th>+ trust-scoped IDF</th></tr>${rows}</table>
+    <div class="notice" style="margin-top:6px">Dense recall@10 vs exact search: ${Object.entries(b.recall_at_10).map(([k, v]) => `${esc(k)} ${v}`).join(" &middot; ")}</div>
+    <div class="notice" style="margin-top:6px">Device footprint (fresh process, model + ${b.n_points.toLocaleString()}-point shard):
+      RSS ${b.device_footprint.rss_mb.after_100_queries} MB, of which model ${Math.round(b.device_footprint.rss_mb.model_loaded - b.device_footprint.rss_mb.start)} MB
+      &middot; shard load ${b.device_footprint.shard_load_s}s &middot; shard on disk ${b.disk_mb.float32} MB
+      ${b.disk_mb.int8 ? `&middot; int8-quantized shard ${b.disk_mb.int8} MB` : ""} &middot; ${esc(b.machine)}</div>`;
 }
 
-async function attack(id) {
-  const dev = DEVICES.find(d => d.id === id);
-  await fetch(`${dev.base}/api/attack`, { method: 'POST' });
-  refreshAll();
+// ---------------- guided demo ----------------
+const steps = [
+  ["Reset + seed", async () => {
+    await post(HUB, "/demo/reset");
+    for (const b of Object.values(DEVICES)) { await post(b, "/api/reset"); await post(b, "/api/seed"); }
+    Object.keys(attackResults).forEach(k => delete attackResults[k]); renderAttacks();
+    ui.robot.tab = "sync queue";
+    return "Both devices hold MOCK memories in their own EdgeShard. Robot's sync queue: the owner email was routed PRIVATE by the PII regex and will never be pushed.";
+  }],
+  ["Offline search", async () => {
+    for (const b of Object.values(DEVICES)) await post(b, "/api/offline?offline=true");
+    await runSearch("robot", "dock 3 charger fault", true); await runSearch("kiosk", "dock 3 charger fault", true);
+    return "Both devices are offline and still answer: dense (bge-small) + BM25 prefetches fused with RRF, entirely local. The timing bar splits query embedding from vector search.";
+  }],
+  ["Online + sync", async () => {
+    for (const b of Object.values(DEVICES)) await post(b, "/api/offline?offline=false");
+    await sync("robot"); await sync("kiosk"); await sync("robot");
+    ui.robot.tab = "memories"; ui.kiosk.tab = "conflicts";
+    return "Each pulled memory landed in the staging shard, passed the screen, and was promoted. dock3=broken is now corroborated by both devices. Kiosk's conflicts tab: robot says firmware 2.3.1, kiosk says 2.3.0 &mdash; both devices compute the same winner from the same signed data and registry trust.";
+  }],
+  ["Launch all attacks", async () => {
+    for (const m of Object.keys(catalog)) await attack(m);
+    return "Six poisoned memories are now in the hub. The hub does not screen anything &mdash; it is an untrusted relay.";
+  }],
+  ["Devices pull", async () => {
+    await sync("kiosk"); await sync("robot");
+    ui.robot.tab = "quarantine"; ui.kiosk.tab = "quarantine";
+    return "Every attack is quarantined with machine-readable reasons. Note the stolen-key attack on robot: signature valid, trusted source &mdash; caught only by the dense-vector neighbor check (cosine &ge; 0.88 to a corroborated memory under a renamed subject).";
+  }],
+  ["Filter off", async () => {
+    await runSearch("kiosk", "firmware version", false); await runSearch("robot", "firmware version", true);
+    return "Kiosk (filter off) sees the superseded firmware value; robot (filter on) does not. Same shard, same query &mdash; the payload filter on an indexed trust_status field is what keeps unverified memories out of every answer.";
+  }],
+];
+let doneSteps = new Set();
+function renderStepper() {
+  document.getElementById("stepper").innerHTML = steps.map(([name], i) =>
+    `<button class="${doneSteps.has(i) ? "done" : ""}" onclick="runStep(${i})">${i + 1}. ${name}</button>`).join("");
+}
+async function runStep(i) {
+  const n = document.getElementById("narration");
+  n.textContent = `Running: ${steps[i][0]}...`;
+  try { n.innerHTML = await steps[i][1](); doneSteps.add(i); }
+  catch (e) { n.textContent = `Step failed: ${e.message}. Are all three services up (python launch.py)?`; }
+  renderStepper(); await refresh();
 }
 
-function refreshAll() { DEVICES.forEach(refresh); }
-
-refreshAll();
-setInterval(refreshAll, 4000);
+renderStepper(); loadAttacks(); renderBench(); refresh();
+setInterval(refresh, 3000);
 </script>
 </body>
 </html>
