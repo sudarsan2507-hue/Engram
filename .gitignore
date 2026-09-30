@@ -1,10 +1,13 @@
 .venv/
 data/
 bench_data/
+bench_smoke/
+.pytest_tmp/
 __pycache__/
 *.pyc
 .pytest_cache/
 *.log
+*.out
 .hub.pid
 .robot.pid
 .kiosk.pid
