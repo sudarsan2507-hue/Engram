@@ -1,0 +1,12 @@
+[
+  {"text": "Kiosk battery backup reading 60 percent", "subject": "kiosk_battery", "value": "60%"},
+  {"text": "Dock 1 charger reported fine during last inspection", "subject": "dock1", "value": "ok"},
+  {"text": "Dock 3 charger fault confirmed by maintenance, sparking, unsafe", "subject": "dock3", "value": "broken"},
+  {"text": "Route B closed for cleaning this afternoon", "subject": "route_b", "value": "closed"},
+  {"text": "Firmware version 2.3.0 still running, update pending", "subject": "firmware", "value": "2.3.0"},
+  {"text": "Visitor counter reset at midnight as scheduled", "subject": "visitor_counter", "value": "reset"},
+  {"text": "Wifi signal weak near loading dock", "subject": "wifi_kiosk", "value": "weak"},
+  {"text": "Screen brightness set to 80 percent for daytime", "subject": "screen_brightness", "value": "80%"},
+  {"text": "Printer paper tray low, refill needed soon", "subject": "printer", "value": "low_paper"},
+  {"text": "Temperature sensor near entrance reads 21C, comfortable", "subject": "sensor_temp", "value": "21C"}
+]

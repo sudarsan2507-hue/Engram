@@ -1,0 +1,12 @@
+[
+  {"text": "Battery level reading 92 percent after morning charge", "subject": "battery", "value": "92%"},
+  {"text": "Dock 1 charger contacts clean and working", "subject": "dock1", "value": "ok"},
+  {"text": "Dock 2 charger contacts clean and working", "subject": "dock2", "value": "ok"},
+  {"text": "Route A traversed without obstacles this morning", "subject": "route_a", "value": "clear"},
+  {"text": "Firmware version 2.3.1 running stable", "subject": "firmware", "value": "2.3.1"},
+  {"text": "Left wheel motor temperature nominal at 38C", "subject": "motor_temp", "value": "38C"},
+  {"text": "Wifi signal strong in warehouse zone B", "subject": "wifi", "value": "strong"},
+  {"text": "Owner contact email is ops-lead@warehouse.example for emergencies", "subject": "owner_contact", "value": "ops-lead@warehouse.example"},
+  {"text": "Lidar sensor calibrated this week", "subject": "lidar", "value": "calibrated"},
+  {"text": "Dock 3 charger fault detected, sparking observed, do not use", "subject": "dock3", "value": "broken"}
+]
