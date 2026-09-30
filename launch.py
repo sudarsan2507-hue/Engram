@@ -17,8 +17,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, "data")
 SERVICES = [
     ("hub", "engram.hub:app", 8000, {}),
-    ("robot", "engram.app:app", 8001, {"ENGRAM_DEVICE_ID": "robot"}),
-    ("kiosk", "engram.app:app", 8002, {"ENGRAM_DEVICE_ID": "kiosk"}),
+    ("robot", "engram.app:create_from_env", 8001, {"ENGRAM_DEVICE_ID": "robot"}),
+    ("kiosk", "engram.app:create_from_env", 8002, {"ENGRAM_DEVICE_ID": "kiosk"}),
 ]
 
 
@@ -53,8 +53,9 @@ def main():
             env = {**os.environ, "ENGRAM_DATA_ROOT": DATA, "ENGRAM_HUB_URL": "http://127.0.0.1:8000",
                    "HF_HUB_DISABLE_SYMLINKS_WARNING": "1", **extra}
             log = open(os.path.join(DATA, f"{name}.log"), "w")
-            p = subprocess.Popen([sys.executable, "-m", "uvicorn", target, "--port", str(port), "--log-level",
-                                  "warning"], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
+            factory = ["--factory"] if target.endswith("create_from_env") else []
+            p = subprocess.Popen([sys.executable, "-m", "uvicorn", target, *factory, "--port", str(port),
+                                  "--log-level", "warning"], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
             procs.append((name, port, p))
             print(f"starting {name:<5} on :{port} ...", end=" ", flush=True)
             if not wait_healthy(port, p):

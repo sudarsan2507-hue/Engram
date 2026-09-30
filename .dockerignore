@@ -1,0 +1,10 @@
+.venv/
+.git/
+data/
+bench_data/
+bench_smoke/
+.pytest_tmp/
+.pytest_cache/
+__pycache__/
+*.log
+*.out

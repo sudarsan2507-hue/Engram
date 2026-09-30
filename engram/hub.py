@@ -98,6 +98,15 @@ def health():
     return {"ok": True}
 
 
+DEVICE_URLS = {"robot": "http://127.0.0.1:8001", "kiosk": "http://127.0.0.1:8002"}
+
+
+@app.get("/config")
+def config():
+    """Where the inspector should reach each device (separate ports locally, sub-paths when hosted)."""
+    return {"devices": DEVICE_URLS}
+
+
 @app.post("/register")
 def register(req: RegisterRequest):
     return state.register(req.device_id, req.public_key)

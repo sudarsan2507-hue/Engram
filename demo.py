@@ -3,11 +3,16 @@
 Every step checks the actual outcome and the script exits non-zero if a
 defense fails -- nothing here is printed from a script of expected results.
 """
+import os
 import sys
 
 import httpx
 
-HUB, ROBOT, KIOSK = "http://127.0.0.1:8000", "http://127.0.0.1:8001", "http://127.0.0.1:8002"
+BASE = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("ENGRAM_BASE_URL", "")).rstrip("/")
+if BASE:  # single-port gateway, e.g. the hosted Space: python demo.py https://<space>.hf.space
+    HUB, ROBOT, KIOSK = BASE, f"{BASE}/robot", f"{BASE}/kiosk"
+else:
+    HUB, ROBOT, KIOSK = "http://127.0.0.1:8000", "http://127.0.0.1:8001", "http://127.0.0.1:8002"
 DEVICES = {"robot": ROBOT, "kiosk": KIOSK}
 http = httpx.Client(timeout=60)
 failures = []
@@ -119,7 +124,7 @@ def main():
         for f in failures:
             print(f"    - {f}")
         return 1
-    print("   all checks passed. Inspector: http://127.0.0.1:8000/")
+    print(f"   all checks passed. Inspector: {HUB}/")
     return 0
 
 
