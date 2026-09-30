@@ -114,6 +114,20 @@ search latency with vs without the `trust_status` filter, plus process RSS.
 Numbers are measured by this script, not hardcoded — rerun it to regenerate
 them; see `benchmark_output.log` for the last run on this machine.
 
+Measured on this machine (Windows, CPU-only, n=50000, 100 queries):
+
+| metric | value |
+|---|---|
+| seed time | 981.3s (51 pts/s) |
+| RSS before seed | 84.4 MB |
+| RSS after seed | 264.2 MB |
+| RSS after benchmark | 342.9 MB |
+| unfiltered search | p50=17.97ms, p95=24.04ms |
+| filtered search (`trust_status=verified`) | p50=17.87ms, p95=22.07ms |
+
+The payload-indexed filter costs essentially nothing at query time — it hits
+the index rather than a post-filter scan.
+
 ## Tests
 
 ```bash
