@@ -1,0 +1,9 @@
+qdrant-edge-py==0.8.0
+fastembed==0.8.1
+pynacl==1.6.2
+fastapi==0.142.2
+uvicorn==0.54.0
+httpx
+pydantic
+psutil
+pytest
