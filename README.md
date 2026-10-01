@@ -19,6 +19,10 @@ search.
 
 > **Public demo:** this deployment intentionally includes reset and attack-simulation controls so visitors can explore the security model. It uses ephemeral demo data; do not submit real memories, credentials, or personal data.
 
+## Deploy on Render
+
+The included `render.yaml` deploys Engram as a Docker web service with `/health` as its health check. The Render free tier has only 512 MB RAM, while the full demo's documented memory footprint is about 460 MB before application overhead; use it for a trial only and choose at least 2 GB RAM for a stable public demo.
+
 ```
 python launch.py --demo      # starts hub + 2 devices, runs the scripted attack demo
 open http://127.0.0.1:8000   # inspector: seven modules and a 7-step guided tour

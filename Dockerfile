@@ -18,4 +18,4 @@ RUN python -c "from engram.embeddings import embed_dense; embed_dense('warmup')"
 
 USER user
 EXPOSE 7860
-CMD ["python", "-m", "uvicorn", "engram.gateway:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "python -m uvicorn engram.gateway:app --host 0.0.0.0 --port ${PORT:-7860}"]
