@@ -1,10 +1,23 @@
-# Engram an tamper-proof edge memory on Qdrant Edge
+---
+title: Engram
+emoji: 🧠
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Tamper-resistant offline memory for edge AI agents
+---
+
+# Engram — tamper-proof edge memory on Qdrant Edge
 
 Offline-first memory for AI agents on edge devices. Each device answers queries
 from its own local `EdgeShard` with no network. When devices sync, **the sync
 layer decides what to trust**: memory poisoning is treated as an attack, and
 the payload filter `trust_status = verified` is the security boundary on every
 search.
+
+> **Public demo:** this deployment intentionally includes reset and attack-simulation controls so visitors can explore the security model. It uses ephemeral demo data; do not submit real memories, credentials, or personal data.
 
 ```
 python launch.py --demo      # starts hub + 2 devices, runs the scripted attack demo
