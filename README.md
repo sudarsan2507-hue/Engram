@@ -1,4 +1,4 @@
-# Engram — tamper-proof edge memory on Qdrant Edge
+# Engram::tamper-proof edge memory on Qdrant Edge
 
 Offline-first memory for AI agents on edge devices. Each device answers queries
 from its own local `EdgeShard` with no network. When devices sync, **the sync
