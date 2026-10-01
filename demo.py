@@ -45,7 +45,7 @@ def state(dev):
 
 
 def main():
-    step("0. Reset hub + both devices, load MOCK seed memories")
+    step("0. Reset hub + both devices, load sample seed memories")
     post(f"{HUB}/demo/reset")
     for base in DEVICES.values():
         post(f"{base}/api/reset")

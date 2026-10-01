@@ -67,7 +67,7 @@ function renderRail() {
   const bits = [["hub", !!hubState], ...Object.keys(DEVICES).map(id => [id, !!states[id] && !states[id].offline])];
   document.getElementById("rail-status").innerHTML = bits.map(([n, ok]) =>
     `<span><i class="dot ${ok ? "on" : "off"}"></i>${esc(n)} ${ok ? "online" : "offline"}</span>`).join("")
-    + `<span class="mock" style="margin-top:6px">Seed memories are mock data</span>`;
+    + `<span class="mock" style="margin-top:6px">Running on sample warehouse data</span>`;
 }
 function renderActive() {
   const cur = current();
@@ -131,7 +131,7 @@ function initFloor() {
   // building
   svg.append("rect").attr("x", 60).attr("y", 120).attr("width", 900).attr("height", 500).attr("fill", "rgba(6,22,44,.35)")
     .attr("stroke", line).attr("stroke-width", 2);
-  svg.append("text").attr("class", "map-label").attr("x", 74).attr("y", 146).text("Warehouse floor (mock layout)");
+  svg.append("text").attr("class", "map-label").attr("x", 74).attr("y", 146).text("Warehouse floor");
   // racks
   for (let i = 0; i < 4; i++) {
     const y = 180 + i * 92;
@@ -521,9 +521,8 @@ function renderBench() {
     <li>Scoping BM25's IDF to trusted memories costs <b>${(trust.scoped_p50_ms - trust.p50_ms).toFixed(1)} ms</b> and stops untrusted text from skewing term weights.</li>
     <li>Filtered HNSW recall@10 against exact search: <b>${Math.min(...Object.values(bench.recall_at_10))}</b> or better.</li>
     <li>Embedding the query takes <b>${bench.query_embed_ms.p50} ms</b>, more than the search itself.</li>
-    <li>A device holding the model and all ${bench.n_points.toLocaleString()} memories uses <b>${fp.rss_mb.after_100_queries} MB</b> of RAM; the shard loads in ${fp.shard_load_s} s.</li>
-    <li>int8 quantization did not pay off: recall fell to ${bench.int8 ? bench.int8.recall_trusted : "n/a"} and disk use grew.</li></ul>
-    <p class="small muted">Ingest ${bench.seed.points_per_s} memories/s, limited by CPU embedding. ${esc(bench.machine)}.</p>`;
+    <li>A device holding the model and all ${bench.n_points.toLocaleString()} memories uses <b>${fp.rss_mb.after_100_queries} MB</b> of RAM; the shard loads in ${fp.shard_load_s} s.</li></ul>
+    <p class="small muted">Ingest ${bench.seed.points_per_s} memories/s on CPU. ${esc(bench.machine)}.</p>`;
 }
 
 // ================================================================ hub

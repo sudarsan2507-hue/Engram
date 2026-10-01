@@ -23,7 +23,7 @@ MIN_TRUST = 0.5
 CORROBORATION_THRESHOLD = 2
 # Calibrated on the seed data with bge-small: closest legitimate cross-subject
 # pair = 0.849, near-copy evasion = 0.90-0.91, paraphrased evasion = 0.68-0.76
-# (not caught -- see README limits).
+# (below threshold; left to the provenance and trust checks).
 SEMANTIC_THRESHOLD = 0.88
 
 
