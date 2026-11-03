@@ -100,3 +100,26 @@ def test_resolve_ranking_independent_of_evaluation_time():
     trust = {"robot": 0.9, "kiosk": 0.8}
     winners = {resolve(a, trust, now_ms=t)["winning_value"] for t in (5 * 86400_000, 60 * 86400_000, 400 * 86400_000)}
     assert len(winners) == 1
+
+
+# ---------- dynamic trust (engram.reputation) ----------
+
+from engram import reputation  # noqa: E402
+
+
+def test_effective_trust_never_exceeds_operator_cap():
+    assert reputation.effective_trust(0.8) == 0.8
+    assert reputation.effective_trust(0.8, good=500) == 0.8
+    assert reputation.effective_trust(0.3, good=500) == 0.3, "a Sybil cannot farm its way past its cap"
+
+
+def test_effective_trust_falls_with_provable_lies():
+    scores = [reputation.effective_trust(0.8, good=9, bad=b) for b in range(4)]
+    assert scores == sorted(scores, reverse=True)
+    assert scores[0] == 0.8 and scores[3] < 0.5, scores
+
+
+def test_only_content_reasons_count_against_signer():
+    assert reputation.counts_against_signer(["nli_contradiction_with_corroborated_memory"])
+    assert not reputation.counts_against_signer(["low_trust_source(0.30<0.5)"])
+    assert not reputation.counts_against_signer(["invalid_or_missing_signature"])
