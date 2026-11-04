@@ -5,7 +5,9 @@ check is recorded, so the quarantine entry explains itself. Checks:
 
   provenance  unregistered device, key differs from the key this device pinned,
               missing/invalid Ed25519 signature
-  trust       source trust below MIN_TRUST (static hub config)
+  trust       source trust below MIN_TRUST: this device's *effective* trust for
+              the signer (engram.reputation), the operator's static score
+              lowered by that signer's provable misbehavior
   routing     a PRIVATE memory showed up on the wire
   semantics   contradicts a corroborated local memory on the same subject, or is
               a near-copy (dense cosine >= SEMANTIC_THRESHOLD) of a
@@ -23,7 +25,7 @@ MIN_TRUST = 0.5
 CORROBORATION_THRESHOLD = 2
 # Calibrated on the seed data with bge-small: closest legitimate cross-subject
 # pair = 0.849, near-copy evasion = 0.90-0.91, paraphrased evasion = 0.68-0.76
-# (below threshold; left to the provenance and trust checks).
+# (not caught -- see README limits).
 SEMANTIC_THRESHOLD = 0.88
 
 
@@ -33,6 +35,7 @@ class Verdict:
     reasons: list[str] = field(default_factory=list)
     evidence: list[dict] = field(default_factory=list)
     same_value_ids: list[str] = field(default_factory=list)
+    signed_ok: bool = False  # valid signature under the pinned key: this memory is evidence about its signer
 
 
 def _brief(payload: dict, **extra) -> dict:
@@ -45,8 +48,10 @@ def _brief(payload: dict, **extra) -> dict:
     }
 
 
-def _provenance_checks(memory: Memory, registry: dict, pinned_keys: dict) -> tuple[list[str], list[dict]]:
-    """Who sent it, is the signature theirs, and do we trust them."""
+def _provenance_checks(memory: Memory, registry: dict, pinned_keys: dict,
+                       trust_of: dict | None = None) -> tuple[list[str], list[dict], bool]:
+    """Who sent it, is the signature theirs, and do we trust them.
+    Returns (reasons, evidence, signed_ok); signed_ok means the pinned key proves the signer."""
     reasons, evidence = [], []
     if memory.sensitivity == PRIVATE:
         reasons.append("private_memory_on_the_wire")
@@ -55,19 +60,20 @@ def _provenance_checks(memory: Memory, registry: dict, pinned_keys: dict) -> tup
     pinned = pinned_keys.get(memory.source_device)
     if entry is None and pinned is None:
         reasons.append("unregistered_device")
-        return reasons, evidence
+        return reasons, evidence, False
 
     key = pinned or entry["public_key"]
-    if not memory.verify(key):
+    signed_ok = memory.verify(key)
+    if not signed_ok:
         reasons.append("invalid_or_missing_signature")
         if entry is not None and entry["public_key"] != key and memory.verify(entry["public_key"]):
             reasons.append("registry_key_mismatch")
             evidence.append({"why": "signature matches the hub's current key for this device, "
                                     "not the key this device pinned on first contact"})
-    trust = (entry or {}).get("trust_score", 0.0)
+    trust = (trust_of or {}).get(memory.source_device, (entry or {}).get("trust_score", 0.0))
     if trust < MIN_TRUST:
         reasons.append(f"low_trust_source({trust:.2f}<{MIN_TRUST})")
-    return reasons, evidence
+    return reasons, evidence, signed_ok
 
 
 def _corroborated(record) -> bool:
@@ -89,18 +95,20 @@ def _semantic_evasions(memory: Memory, dense: list[float], trusted: EdgeShard) -
     return [n for n in neighbors if _corroborated(n) and n.payload["value"] != memory.value]
 
 
-def _decide(reasons: list[str], evidence: list[dict], different: list, same_value: list) -> Verdict:
+def _decide(reasons: list[str], evidence: list[dict], different: list, same_value: list,
+            signed_ok: bool) -> Verdict:
     if reasons:
-        return Verdict("quarantine", reasons, evidence)
+        return Verdict("quarantine", reasons, evidence, signed_ok=signed_ok)
     if different:
-        return Verdict("conflict", evidence=[_brief(r.payload) for r in different])
+        return Verdict("conflict", evidence=[_brief(r.payload) for r in different], signed_ok=signed_ok)
     if same_value:
-        return Verdict("corroborate", same_value_ids=[str(r.id) for r in same_value])
-    return Verdict("promote")
+        return Verdict("corroborate", same_value_ids=[str(r.id) for r in same_value], signed_ok=signed_ok)
+    return Verdict("promote", signed_ok=signed_ok)
 
 
-def screen(memory: Memory, dense: list[float], registry: dict, pinned_keys: dict, trusted: EdgeShard) -> Verdict:
-    reasons, evidence = _provenance_checks(memory, registry, pinned_keys)
+def screen(memory: Memory, dense: list[float], registry: dict, pinned_keys: dict, trusted: EdgeShard,
+           trust_of: dict | None = None) -> Verdict:
+    reasons, evidence, signed_ok = _provenance_checks(memory, registry, pinned_keys, trust_of)
 
     same_subject = shard_ops.scroll_all(trusted, shard_ops.trusted_filter([shard_ops.match("subject", memory.subject)]))
     same_value = [r for r in same_subject if r.payload["value"] == memory.value]
@@ -115,4 +123,4 @@ def screen(memory: Memory, dense: list[float], registry: dict, pinned_keys: dict
         reasons.append("semantic_conflict_with_corroborated_memory")
         evidence += [_brief(n.payload, why=f"cosine {n.score:.3f} under a different subject") for n in evasions]
 
-    return _decide(reasons, evidence, different, same_value)
+    return _decide(reasons, evidence, different, same_value, signed_ok)
