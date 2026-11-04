@@ -4,7 +4,8 @@
                   always through the trust_status=verified filter
   staging shard   landing zone for pulled points; embedded once here, screened
                   here, and copied (vectors included) into trusted on promotion
-  engram.db       quarantine, conflict history, pinned peer keys, sync cursors
+  engram.db       quarantine, conflict history, pinned peer keys, sync cursors,
+                  per-peer reputation (engram.reputation)
 
 EdgeShard snapshot restore works on whole segments, so there is no hook to
 screen individual points during a snapshot sync -- hence the staging shard.
@@ -19,7 +20,7 @@ from contextlib import contextmanager
 
 from qdrant_edge import Point
 
-from . import crypto_utils
+from . import crypto_utils, reputation
 from . import shard as shard_ops
 from .corroboration import resolve
 from .embeddings import embed_dense
@@ -74,6 +75,8 @@ class Device:
                     winner TEXT, breakdown TEXT, trigger TEXT, ts INTEGER);
                 CREATE TABLE IF NOT EXISTS pinned_keys (device_id TEXT PRIMARY KEY, public_key TEXT, ts INTEGER);
                 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
+                CREATE TABLE IF NOT EXISTS reputation (device_id TEXT PRIMARY KEY, good REAL DEFAULT 0,
+                    bad REAL DEFAULT 0, last_bad TEXT, ts INTEGER);
                 """
             )
             con.execute("INSERT OR IGNORE INTO pinned_keys VALUES (?, ?, ?)", (self.device_id, self.public_key, now_ms()))
@@ -107,7 +110,7 @@ class Device:
             for name in ("trusted", "staging"):
                 shard_ops.wipe(os.path.join(self.data_dir, name))
             with self._db() as con:
-                for table in ("quarantine", "conflicts", "pinned_keys", "kv"):
+                for table in ("quarantine", "conflicts", "pinned_keys", "kv", "reputation"):
                     con.execute(f"DELETE FROM {table}")
             self.log.clear()
             self.registry = {}
@@ -128,6 +131,41 @@ class Device:
         with self._db() as con:
             for dev, info in registry.items():
                 con.execute("INSERT OR IGNORE INTO pinned_keys VALUES (?, ?, ?)", (dev, info["public_key"], now_ms()))
+
+    # ---------- reputation ----------
+
+    def _reputation_rows(self) -> dict:
+        with self._db() as con:
+            rows = con.execute("SELECT device_id, good, bad, last_bad FROM reputation").fetchall()
+        return {r[0]: {"good": r[1], "bad": r[2], "last_bad": json.loads(r[3]) if r[3] else None} for r in rows}
+
+    def trust_of(self) -> dict:
+        """Effective trust per registered peer: operator score capped, lowered by provable misbehavior."""
+        rows = self._reputation_rows()
+        out = {}
+        for dev, info in self.registry.items():
+            r = rows.get(dev, {})
+            out[dev] = reputation.effective_trust(info.get("trust_score", 0.0), r.get("good", 0), r.get("bad", 0))
+        return out
+
+    def reputation(self) -> dict:
+        rows = self._reputation_rows()
+        out = {}
+        for dev, info in self.registry.items():
+            if dev == self.device_id:
+                continue
+            r = rows.get(dev, {})
+            out[dev] = {**reputation.describe(info.get("trust_score", 0.0), r.get("good", 0), r.get("bad", 0)),
+                        "last_bad": r.get("last_bad")}
+        return out
+
+    def _record(self, device_id: str, good: float = 0, bad: float = 0, why: dict = None):
+        with self._db() as con:
+            con.execute("INSERT OR IGNORE INTO reputation (device_id, good, bad, ts) VALUES (?, 0, 0, ?)",
+                        (device_id, now_ms()))
+            con.execute("UPDATE reputation SET good = good + ?, bad = bad + ?, ts = ?, "
+                        "last_bad = COALESCE(?, last_bad) WHERE device_id = ?",
+                        (good, bad, now_ms(), json.dumps(why) if why else None, device_id))
 
     # ---------- local write ----------
 
