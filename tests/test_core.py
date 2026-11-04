@@ -1,7 +1,6 @@
 """Unit tests against the real qdrant_edge API and real Ed25519 -- no mocks."""
 import uuid
 
-from qdrant_edge import Point
 
 from engram import crypto_utils
 from engram import shard as shard_ops

@@ -3,7 +3,6 @@ import pytest
 
 from engram import crypto_utils
 from engram.device import OfflineError
-from engram.schema import Memory
 
 from conftest import by_subject
 

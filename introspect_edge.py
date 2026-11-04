@@ -1,7 +1,6 @@
 """Step 0: introspect qdrant-edge-py's real API before building anything on top of it."""
 import inspect
 import pkgutil
-import importlib
 
 import qdrant_edge as edge
 
