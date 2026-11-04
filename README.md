@@ -9,7 +9,7 @@ pinned: false
 short_description: Tamper-resistant offline memory for edge AI agents
 ---
 
-# Engram — tamper-proof edge memory on Qdrant Edge
+# Engram - tamper-proof edge memory on Qdrant Edge
 
 Offline-first memory for AI agents on edge devices. Each device answers queries
 from its own local `EdgeShard` with no network. When devices sync, **the sync
@@ -35,7 +35,7 @@ and the robot reroutes to the sparking charger on a claim the screen quarantined
 
 ---
 
-## What a judge should look at (10 minutes)
+## Quick tour (10 minutes)
 
 1. **Run `python launch.py --demo`.** It resets everything, seeds two devices,
    syncs them, launches six poisoning attacks, and **asserts** the outcome of
@@ -46,13 +46,13 @@ and the robot reroutes to the sparking charger on a claim the screen quarantined
    watch: Floor (the robot's beliefs on a warehouse map, with sync traffic
    animated), Sync pipeline, Devices, Attack lab (which check stopped each
    attack), Conflicts, Benchmark, Hub.
-3. **Read [`engram/poison_screen.py`](engram/poison_screen.py)** — the trust
+3. **Read [`engram/poison_screen.py`](engram/poison_screen.py)** - the trust
    decision, ~100 lines.
-4. **Read [`engram/device.py`](engram/device.py)** `pull()` — the staging shard
+4. **Read [`engram/device.py`](engram/device.py)** `pull()` - the staging shard
    pipeline: embed once → screen → copy vectors into the trusted shard.
-5. **Look at the [benchmark](#benchmark-50000-memories)** — filters swept across
+5. **Look at the [benchmark](#benchmark-50000-memories)** - filters swept across
    selectivities, payload index on/off, ACORN, recall vs exact search, int8.
-6. **Run `pytest`** — 34 tests against the real `qdrant_edge` API, real
+6. **Run `pytest`** - 34 tests against the real `qdrant_edge` API, real
    embeddings and real Ed25519. No mocks.
 
 ---
@@ -76,7 +76,7 @@ and the robot reroutes to the sparking charger on a claim the screen quarantined
 
 - **Trusted shard**: local writes and promoted pulls. Search only ever reads it
   through the `trust_status=verified` filter.
-- **Staging shard**: why it exists — `EdgeShard.update_from_snapshot()` restores
+- **Staging shard**: why it exists - `EdgeShard.update_from_snapshot()` restores
   whole segments; there is no hook to inspect individual points during a
   snapshot sync. So pulled points land in staging, get embedded **once** in a
   batch, are screened using their staged vectors, and on promotion their
@@ -105,7 +105,7 @@ claim: the sparking Dock 3 charger is *"safe to ignore"*.
 | Sybil device | legitimately registers a new device; **valid signature** | trust + corroboration | `low_trust_source(0.30<0.5)`, `contradicts_corroborated_memory` |
 | Stolen trusted key + subject evasion | kiosk's real private key (trust 0.8); files claim under a renamed subject; **valid signature, trusted source** | semantic neighbor check | `semantic_conflict_with_corroborated_memory` |
 | Malformed payload | garbage JSON / non-UUID id | schema validation | `malformed_payload` (no crash) |
-| Hub key swap vs legit traffic | compromised registry | pinned keys | legit memories **still accepted** — verified against the key pinned on first contact |
+| Hub key swap vs legit traffic | compromised registry | pinned keys | legit memories **still accepted** - verified against the key pinned on first contact |
 
 The last two attacks are why the screen has more than a signature check:
 crypto proves *who* said something, not that it is *true*.
@@ -139,12 +139,12 @@ failures are never releasable.
 | where | filter | index |
 |---|---|---|
 | every search | `trust_status = verified` | keyword |
-| BM25 IDF statistics | `IdfParams(corpus = trust filter)` — term weights computed over trusted points only, so superseded/unverified text cannot skew BM25 ranking | keyword |
-| sync queue (what may be pushed) | `source_device = me AND sensitivity = SYNC AND ts > last_push` — PRIVATE cannot match, by construction | keyword + integer range |
+| BM25 IDF statistics | `IdfParams(corpus = trust filter)` - term weights computed over trusted points only, so superseded/unverified text cannot skew BM25 ranking | keyword |
+| sync queue (what may be pushed) | `source_device = me AND sensitivity = SYNC AND ts > last_push` - PRIVATE cannot match, by construction | keyword + integer range |
 | poison screen, same-subject check | `trust_status = verified AND subject = s` | keyword |
 | poison screen, semantic check | dense `Nearest` + `score_threshold 0.88` + `trust_status = verified AND NOT subject = s` | keyword |
 | conflict resolution candidates | `subject = s AND trust_status IN (verified, superseded)` | keyword |
-| inspector counters | `count()` with the filters above | — |
+| inspector counters | `count()` with the filters above | - |
 
 Conflict losers are not deleted and signed content is never rewritten: they
 are marked `superseded`, which the filter excludes. The inspector's "trust
@@ -159,7 +159,7 @@ recency_decay = 0.5 ^ (age / 7 days)
 
 - Every device uses the **same registry trust** for every device, including
   itself (no self-bias), plus a deterministic tie-break. Two devices holding the
-  same candidates pick the same winner — tested in `test_conflict_converges_on_both_devices`.
+  same candidates pick the same winner - tested in `test_conflict_converges_on_both_devices`.
 - The ranking is independent of *when* it is computed: exponential decay makes
   the ratio between two candidates depend only on the gap between their
   timestamps (`test_resolve_ranking_independent_of_evaluation_time`).
@@ -167,7 +167,7 @@ recency_decay = 0.5 ^ (age / 7 days)
 
 ## Benchmark (50,000 memories)
 
-`python benchmark.py` — 50k synthetic memories across 50 devices and 10
+`python benchmark.py` - 50k synthetic memories across 50 devices and 10
 subjects (90% verified, 20% PRIVATE, timestamps over 30 days), 200 queries.
 Measured on a Windows 10 laptop (Intel, 2 physical / 4 logical cores), CPU only.
 Raw output: `bench_results.json`.
@@ -175,7 +175,7 @@ Raw output: `bench_results.json`.
 **Ingest**: batched embedding 85 docs/s (bge-small on CPU is the bottleneck;
 BM25 alone runs at ~95k docs/s) · upsert 25 s · HNSW build (`optimize()`) 19.7 s.
 
-**Vector search latency** — hybrid dense + BM25 + RRF, HNSW built, query
+**Vector search latency** - hybrid dense + BM25 + RRF, HNSW built, query
 embedding excluded (query embedding itself: p50 10.2 ms):
 
 | filter | passes | filter only, p50 / p95 ms | + trust-scoped BM25 IDF |
@@ -202,7 +202,7 @@ What this says:
   flag (`scoped_idf`) in `shard.hybrid_query`.
 - **Filtered HNSW recall@10 vs exact search**: 0.9995 (trust filter), 1.0
   (source_device, with and without ACORN), 1.0 (subject+device). ACORN gave no
-  gain here — at 0.18% selectivity the planner already answers from the
+  gain here - at 0.18% selectivity the planner already answers from the
   payload index.
 - **int8 scalar quantization is not worth it at this scale**: p50 1.56 ms vs
   1.63 ms, recall@10 **0.911** (no rescoring), and disk *grew* (652 MB vs 578 MB)
@@ -221,7 +221,7 @@ benchmark data held): **460 MB RSS**, of which the model is 122 MB; shard load
   regression test `test_signature_survives_shard_roundtrip`.
 - **An empty EdgeShard is ~169 MB on disk.** Fixed 32 MB pre-allocated pages:
   two WAL segments, payload storage, dense and sparse vector stores. Two shards
-  per device ≈ 340 MB before the first memory — a real cost on small edge
+  per device ≈ 340 MB before the first memory - a real cost on small edge
   storage (it filled the dev machine's disk during testing; tests now clean up
   each shard).
 - **Query embedding dominates latency.** Warm vector search on a device is
@@ -230,7 +230,7 @@ benchmark data held): **460 MB RSS**, of which the model is 122 MB; shard load
 - **Embed once.** Pulled memories are embedded in one batch into staging and
   their vectors are copied on promotion; pulls are incremental via a hub cursor
   and skip ids already known, so nothing is embedded or screened twice.
-- **Payload indexes matter for selective filters** — see the benchmark rows
+- **Payload indexes matter for selective filters** - see the benchmark rows
   with the index dropped.
 - **Semantic threshold was calibrated, not guessed**: on the seed data the
   closest legitimate cross-subject pair is cosine 0.849, the near-copy evasion
@@ -244,10 +244,10 @@ benchmark data held): **460 MB RSS**, of which the model is 122 MB; shard load
 pytest            # 34 tests, ~1 min (first run also downloads the ~130 MB embedding model)
 ```
 
-- `tests/test_core.py` — signing, tamper detection, the float-drift
+- `tests/test_core.py` - signing, tamper detection, the float-drift
   regression, PII router, malformed payloads, trust filter vs unfiltered search,
   payload indexes, corroboration math and time-invariance.
-- `tests/test_e2e.py` — hub + two devices in-process (FastAPI `TestClient`):
+- `tests/test_e2e.py` - hub + two devices in-process (FastAPI `TestClient`):
   steady-state corroboration, conflict convergence on both devices, superseded
   hidden only by the filter, PRIVATE never reaching the hub, only signed fields
   on the wire, incremental pulls, offline behavior, **all six attacks
