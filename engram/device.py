@@ -426,5 +426,6 @@ class Device:
                 "conflicts": self.conflicts(),
                 "pinned_keys": pinned,
                 "registry": self.registry,
+                "reputation": self.reputation(),
                 "log": list(self.log)[::-1][:80],
             }
