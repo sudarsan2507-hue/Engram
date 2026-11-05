@@ -136,3 +136,15 @@ def test_identity_persists_across_restart(world, tmp_path):
     assert again.public_key == pk
     again.trusted.close()
     again.staging.close()
+
+
+# ---------- dynamic trust ----------
+
+def test_forged_memories_cannot_frame_an_honest_device(world):
+    """impersonate/tamper claim to come from robot but are not signed by robot's pinned key."""
+    for mode in ("impersonate", "tamper"):
+        world.http.post(f"/demo/attack/{mode}")
+    summary = world.kiosk.pull(world.hub)
+    assert summary["quarantined"] == 2
+    assert world.kiosk.reputation()["robot"]["bad"] == 0
+    assert world.kiosk.trust_of()["robot"] == 0.9
