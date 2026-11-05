@@ -261,10 +261,13 @@ class Device:
             if memories:
                 shard_ops.upsert(self.staging, to_points(memories))
                 staged = {str(r.id): r for r in self.staging.retrieve([m.id for m in memories], True, True)}
+                pinned = self.pinned_keys()
                 for m in memories:
                     rec = staged[m.id]
-                    verdict = screen(m, rec.vector["dense"], self.registry, self.pinned_keys(), self.trusted)
+                    before = self.trust_of().get(m.source_device)
+                    verdict = screen(m, rec.vector["dense"], self.registry, pinned, self.trusted, self.trust_of())
                     self._apply(verdict, m, rec)
+                    self._update_reputation(verdict, m, before)
                     summary[{"promote": "promoted", "corroborate": "corroborated", "conflict": "conflicts",
                              "quarantine": "quarantined"}[verdict.decision]] += 1
                 shard_ops.delete(self.staging, [m.id for m in memories])
@@ -274,6 +277,19 @@ class Device:
             self._kv_set("flow", {k: flow.get(k, 0) + v for k, v in summary.items()})
             self._log("pull", since=since, **summary)
             return summary
+
+    def _update_reputation(self, verdict, m: Memory, before):
+        """Only memories with a valid signature under the pinned key are evidence about their signer."""
+        if not verdict.signed_ok:
+            return
+        if verdict.decision == "quarantine":
+            if reputation.counts_against_signer(verdict.reasons):
+                self._record(m.source_device, bad=1, why={"id": m.id, "subject": m.subject, "value": m.value,
+                                                           "reasons": verdict.reasons, "ts": now_ms()})
+                after = self.trust_of().get(m.source_device)
+                self._log("reputation_drop", device=m.source_device, before=before, after=after)
+        elif verdict.decision in ("promote", "corroborate"):
+            self._record(m.source_device, good=1)
 
     def _known(self, mem_id: str) -> bool:
         if self.trusted.retrieve([mem_id], False, False):
@@ -315,7 +331,7 @@ class Device:
         by_value: dict[str, list] = {}
         for r in recs:
             by_value.setdefault(r.payload["value"], []).append(r)
-        trust_of = {d: info.get("trust_score", 0.0) for d, info in self.registry.items()}
+        trust_of = self.trust_of()
         result = resolve({v: [r.payload for r in rs] for v, rs in by_value.items()}, trust_of)
         for value, rs in by_value.items():
             status = TRUST_VERIFIED if value == result["winning_value"] else TRUST_SUPERSEDED
