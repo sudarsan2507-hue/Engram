@@ -104,7 +104,7 @@ def test_resolve_ranking_independent_of_evaluation_time():
 
 # ---------- dynamic trust (engram.reputation) ----------
 
-from engram import reputation  # noqa: E402
+from engram import nli, reputation  # noqa: E402
 
 
 def test_effective_trust_never_exceeds_operator_cap():
@@ -123,3 +123,23 @@ def test_only_content_reasons_count_against_signer():
     assert reputation.counts_against_signer(["nli_contradiction_with_corroborated_memory"])
     assert not reputation.counts_against_signer(["low_trust_source(0.30<0.5)"])
     assert not reputation.counts_against_signer(["invalid_or_missing_signature"])
+
+
+# ---------- NLI judge (real ONNX model) ----------
+
+def test_topic_hypothesis_splits_digits():
+    assert nli.topic_hypothesis("dock3") == "This is about dock 3."
+    assert nli.topic_hypothesis("charging_station_3") == "This is about charging station 3."
+
+
+def test_nli_topic_gate_rejects_unrelated_pairs():
+    """Raw NLI scores 'wifi strong' vs 'printer low' as a contradiction; the topic gate must stop that."""
+    j = nli.judge("Wifi signal strong in warehouse zone B",
+                  [("Printer paper tray low, refill needed soon", "printer")])[0]
+    assert j["topic"] < nli.TOPIC_THRESHOLD and j["contradiction"] is None
+
+
+def test_nli_catches_paraphrase_of_corroborated_fact():
+    j = nli.judge("Charging bay three passed inspection and is fine to use",
+                  [("Dock 3 charger fault detected, sparking observed, do not use", "dock3")])[0]
+    assert j["topic"] >= nli.TOPIC_THRESHOLD and j["contradiction"] >= 0.9, j
