@@ -13,11 +13,16 @@ check is recorded, so the quarantine entry explains itself. Checks:
               a near-copy (dense cosine >= SEMANTIC_THRESHOLD) of a
               corroborated memory filed under a different subject -- the
               "rename the subject to dodge the check" evasion
+  nli         a *paraphrase* of the evasion: a new subject whose text an on-device
+              NLI cross-encoder reads as being about a corroborated memory's subject
+              (topic gate) and contradicting it (cosine >= NLI_FLOOR,
+              P(topic) >= nli.TOPIC_THRESHOLD, P(contradiction) >= NLI_THRESHOLD)
 """
 from dataclasses import dataclass, field
 
 from qdrant_edge import EdgeShard, Filter
 
+from . import nli
 from . import shard as shard_ops
 from .schema import PRIVATE, Memory
 
@@ -25,8 +30,13 @@ MIN_TRUST = 0.5
 CORROBORATION_THRESHOLD = 2
 # Calibrated on the seed data with bge-small: closest legitimate cross-subject
 # pair = 0.849, near-copy evasion = 0.90-0.91, paraphrased evasion = 0.68-0.76
-# (not caught -- see README limits).
+# (below threshold; caught by the NLI step instead).
 SEMANTIC_THRESHOLD = 0.88
+# NLI runs only on corroborated neighbors at or above this cosine, top NLI_MAX_PAIRS of them,
+# and only for memories that passed every other check: unsigned or untrusted junk cannot buy model time.
+NLI_FLOOR = 0.55
+NLI_THRESHOLD = 0.90
+NLI_MAX_PAIRS = 4
 
 
 @dataclass
@@ -95,6 +105,21 @@ def _semantic_evasions(memory: Memory, dense: list[float], trusted: EdgeShard) -
     return [n for n in neighbors if _corroborated(n) and n.payload["value"] != memory.value]
 
 
+def _nli_contradictions(memory: Memory, dense: list[float], trusted: EdgeShard) -> list[tuple]:
+    """Corroborated neighbors the NLI model reads as the same topic and contradicted. [(record, judgement)]"""
+    near = shard_ops.dense_neighbors(
+        trusted, dense, limit=NLI_MAX_PAIRS * 2,
+        filter=Filter(must=[shard_ops.match("trust_status", "verified")]),
+        score_threshold=NLI_FLOOR,
+    )
+    near = [n for n in near if _corroborated(n) and n.payload["value"] != memory.value][:NLI_MAX_PAIRS]
+    if not near:
+        return []
+    judged = nli.judge(memory.text, [(n.payload["text"], n.payload["subject"]) for n in near])
+    return [(n, j) for n, j in zip(near, judged)
+            if j["contradiction"] is not None and j["contradiction"] >= NLI_THRESHOLD]
+
+
 def _decide(reasons: list[str], evidence: list[dict], different: list, same_value: list,
             signed_ok: bool) -> Verdict:
     if reasons:
@@ -122,5 +147,17 @@ def screen(memory: Memory, dense: list[float], registry: dict, pinned_keys: dict
     if evasions:
         reasons.append("semantic_conflict_with_corroborated_memory")
         evidence += [_brief(n.payload, why=f"cosine {n.score:.3f} under a different subject") for n in evasions]
+
+    # A memory under a brand-new subject is the only shape the same-subject check cannot judge,
+    # so that is where a paraphrased contradiction would hide. The model is the expensive check:
+    # it runs last, and only for memories every cheaper check let through.
+    if nli.ENABLED and not reasons and signed_ok and not same_subject:
+        hits = _nli_contradictions(memory, dense, trusted)
+        if hits:
+            reasons.append("nli_contradiction_with_corroborated_memory")
+            evidence += [_brief(n.payload, text=n.payload["text"],
+                                why=f"NLI: about {n.payload['subject']} (P={j['topic']:.2f}), "
+                                    f"contradicts it (P={j['contradiction']:.2f}), cosine {n.score:.3f}")
+                         for n, j in hits]
 
     return _decide(reasons, evidence, different, same_value, signed_ok)
