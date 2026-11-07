@@ -20,7 +20,7 @@ from contextlib import contextmanager
 
 from qdrant_edge import Point
 
-from . import crypto_utils, reputation
+from . import crypto_utils, nli, reputation
 from . import shard as shard_ops
 from .corroboration import resolve
 from .embeddings import embed_dense
@@ -102,6 +102,7 @@ class Device:
 
     def warmup(self):
         embed_dense("warmup")
+        nli.warmup()
 
     def reset(self):
         with self.lock:
