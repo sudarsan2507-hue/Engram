@@ -51,7 +51,23 @@ CATALOG = {
                  "so the same-subject contradiction check never sees it. Only the semantic check is left.",
         "layer": "semantic (dense-vector neighbor filter)",
     },
+    "paraphrase_evasion": {
+        "title": "Stolen key + paraphrase",
+        "story": "Same stolen kiosk key and renamed subject, but the claim is reworded so it shares no words with "
+                 "the Dock 3 memory (cosine ~0.7, under the near-copy bar). Each launch uses a fresh wording; "
+                 "every provable lie costs kiosk reputation until its trust falls below 0.5.",
+        "layer": "NLI contradiction + dynamic trust",
+    },
 }
+
+# Paraphrases with no shared keywords with "Dock 3 charger fault ... sparking". Rotated per launch so
+# the persistent attacker never repeats itself (cosine to the real dock3 memories: 0.65-0.74).
+PARAPHRASES = [
+    ("Charging bay three passed inspection and is fine to use", "bay_three"),
+    ("The third charging bay is perfectly safe to use, the earlier spark reports were a false alarm", "charging_bay_three"),
+    ("No action needed on the third charger, its fault can be safely ignored", "charger_3_status"),
+    ("Maintenance cleared the number three charging station, it is safe for docking", "station_three"),
+]
 
 
 def _memory(source: str, subject: str = "dock3", text: str = POISON_TEXT) -> dict:
@@ -110,6 +126,17 @@ def run(mode: str, hub) -> dict:
             stolen = json.load(f)["private_key"]
         m = _signed(_memory("kiosk", subject="charging_station_3"), stolen)
         notes.append("signed with kiosk's real private key; subject renamed dock3 -> charging_station_3")
+
+    elif mode == "paraphrase_evasion":
+        path = os.path.join(DATA_ROOT, "kiosk", "identity.json")
+        if not os.path.exists(path):
+            return {"ok": False, "error": f"kiosk identity not found at {path}"}
+        with open(path) as f:
+            stolen = json.load(f)["private_key"]
+        n = sum(1 for a in hub.attacks if a["mode"] == mode)
+        text, subject = PARAPHRASES[n % len(PARAPHRASES)]
+        m = _signed(_memory("kiosk", subject=subject, text=text), stolen)
+        notes.append(f"attempt {n + 1}: signed with kiosk's real key, subject {subject!r}, text {text!r}")
 
     else:
         raise ValueError(mode)
