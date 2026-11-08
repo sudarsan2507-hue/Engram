@@ -90,7 +90,7 @@ def main():
     fw = [m for m in state("kiosk")["memories"] if m["subject"] == "firmware"]
     check(all(m["sig_valid"] for m in fw), "loser is marked superseded, signed content untouched")
 
-    step("4. Six poisoning attacks, all claiming the sparking Dock 3 charger is 'safe to ignore'")
+    step("4. Seven poisoning attacks, all claiming the sparking Dock 3 charger is 'safe to ignore'")
     catalog = get(f"{HUB}/demo/attacks")
     launched = {}
     for mode, meta in catalog.items():
@@ -105,6 +105,12 @@ def main():
     for mode, mid in launched.items():
         dev, reasons = quarantine.get(mid, (None, None))
         check(dev is not None, f"{catalog[mode]['title']:<38} quarantined on {dev}: {reasons}")
+    para = next(q for q in state("robot")["quarantine"] if q["id"] == launched["paraphrase_evasion"])
+    for e in para["evidence"]:
+        print(f"   paraphrase vs corroborated {e['subject']}={e['value']}: {e['why']}")
+    check("semantic_conflict_with_corroborated_memory" not in para["reasons"]
+          and "nli_contradiction_with_corroborated_memory" in para["reasons"],
+          "reworded claim slipped past cosine, caught by on-device NLI")
     for dev, base in DEVICES.items():
         hits = get(f"{base}/api/search", params={"q": "is the dock 3 charger safe", "limit": 20})["results"]
         check(all(h["payload"]["value"] != "safe to ignore" for h in hits), f"{dev}: poison absent from search")
