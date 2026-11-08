@@ -14,6 +14,7 @@ EXPECTED = {
     "key_hijack": ("kiosk", {"invalid_or_missing_signature", "registry_key_mismatch"}),
     "sybil": ("robot", {"low_trust_source(0.30<0.5)", "contradicts_corroborated_memory"}),
     "stolen_key_evasion": ("robot", {"semantic_conflict_with_corroborated_memory"}),
+    "paraphrase_evasion": ("robot", {"nli_contradiction_with_corroborated_memory"}),
 }
 
 
@@ -138,7 +139,31 @@ def test_identity_persists_across_restart(world, tmp_path):
     again.staging.close()
 
 
-# ---------- dynamic trust ----------
+# ---------- NLI + dynamic trust ----------
+
+def test_paraphrase_slips_past_cosine_but_not_nli(world):
+    world.http.post("/demo/attack/paraphrase_evasion")
+    world.robot.pull(world.hub)
+    entry = world.robot.quarantined()[0]
+    assert "semantic_conflict_with_corroborated_memory" not in entry["reasons"], "cosine alone should miss it"
+    assert "nli_contradiction_with_corroborated_memory" in entry["reasons"]
+    assert any(e.get("subject") == "dock3" for e in entry["evidence"])
+
+
+def test_stolen_key_loses_power_after_repeated_lies(world):
+    trust = [world.robot.trust_of()["kiosk"]]
+    for _ in range(3):
+        world.http.post("/demo/attack/paraphrase_evasion")
+        world.robot.pull(world.hub)
+        trust.append(world.robot.trust_of()["kiosk"])
+    assert trust == sorted(trust, reverse=True) and trust[0] == 0.8 and trust[-1] < 0.5, trust
+    world.http.post("/demo/attack/paraphrase_evasion")
+    world.robot.pull(world.hub)
+    latest = world.robot.quarantined()[0]["reasons"]
+    assert any(r.startswith("low_trust_source") for r in latest), latest
+    assert "nli_contradiction_with_corroborated_memory" not in latest, "untrusted input must not buy model time"
+    assert world.robot.reputation()["kiosk"]["bad"] == 3
+
 
 def test_forged_memories_cannot_frame_an_honest_device(world):
     """impersonate/tamper claim to come from robot but are not signed by robot's pinned key."""
@@ -148,3 +173,13 @@ def test_forged_memories_cannot_frame_an_honest_device(world):
     assert summary["quarantined"] == 2
     assert world.kiosk.reputation()["robot"]["bad"] == 0
     assert world.kiosk.trust_of()["robot"] == 0.9
+
+
+def test_legit_new_subject_memories_pass_nli(world):
+    for text, subject, value in [("Dock 4 charger installed and tested, working", "dock4", "ok"),
+                                 ("Loading bay door jammed, maintenance called", "bay_door", "jammed"),
+                                 ("Forklift battery swapped this morning", "forklift_battery", "fresh")]:
+        world.kiosk.write(text, subject, value)
+    world.kiosk.push(world.hub)
+    summary = world.robot.pull(world.hub)
+    assert summary["promoted"] == 3 and summary["quarantined"] == 0, (summary, world.robot.quarantined())
