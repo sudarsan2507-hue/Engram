@@ -124,6 +124,22 @@ def main():
     print(f"   filter off: {fmt(off)}")
     check(len(fmt(off)) > len(fmt(on)), "superseded value only visible with the filter removed")
 
+    step("7. Persistent attacker: the stolen kiosk key keeps lying in new words")
+    rep = lambda: state("robot")["reputation"]["kiosk"]
+    print(f"   robot's trust in kiosk: {rep()['effective_trust']:.2f}  ({rep()['formula']})")
+    for attempt in range(3):
+        res = post(f"{HUB}/demo/attack/paraphrase_evasion")
+        post(f"{ROBOT}/api/sync")
+        latest = next(q for q in state("robot")["quarantine"] if q["id"] == res["payload"]["id"])
+        r = rep()
+        print(f"   attempt -> {res['payload']['subject']:<18} quarantined {latest['reasons']}")
+        print(f"   robot's trust in kiosk: {r['effective_trust']:.2f}  ({r['formula']})")
+    check(rep()["effective_trust"] < 0.5, "stolen key lost its trust: kiosk now below the 0.5 minimum on robot")
+    check(any(x.startswith("low_trust_source") for x in latest["reasons"]),
+          "the next lie is rejected on trust alone, before any model runs")
+    forged = state("kiosk")["reputation"]["robot"]
+    check(forged["bad"] == 0, f"forged 'robot' memories did not frame robot on kiosk (trust {forged['effective_trust']})")
+
     step("Result")
     if failures:
         print(f"   {len(failures)} check(s) FAILED:")
