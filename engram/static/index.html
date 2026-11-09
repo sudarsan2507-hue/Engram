@@ -79,12 +79,13 @@
         <div class="sheet-head">
           <div><h1 id="h-attacks">Attack lab</h1>
             <p>Every attack claims the sparking Dock 3 charger is "safe to ignore". Launch one, then sync a device. A red cell
-              marks the check that fired. Two attacks carry valid signatures, so cryptography alone would have let them in.</p></div>
+              marks the check that fired. Three attacks carry valid signatures, so cryptography alone would have let them in.
+              Relaunch "Stolen key + paraphrase" a few times to watch the robot stop trusting the kiosk's stolen key.</p></div>
           <div class="titleblock" data-sheet="4"></div>
         </div>
         <div class="frame scroll-x" id="matrix"></div>
         <div class="row" style="margin-top:14px">
-          <button class="hit" onclick="launchAll()">Launch all six</button>
+          <button class="hit" onclick="launchAll()">Launch all seven</button>
           <button onclick="sync('kiosk').then(() => sync('robot'))">Sync both devices</button>
         </div>
       </div>

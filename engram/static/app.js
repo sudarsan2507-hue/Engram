@@ -432,15 +432,18 @@ const CHECKS = [
   ["Trust score", r => r.startsWith("low_trust_source")],
   ["Corroboration", r => r === "contradicts_corroborated_memory"],
   ["Semantic neighbors", r => r === "semantic_conflict_with_corroborated_memory"],
+  ["NLI contradiction", r => r === "nli_contradiction_with_corroborated_memory"],
 ];
 function attackOutcome(mode) {
-  const last = hubState ? [...hubState.attacks].reverse().find(x => x.mode === mode) : null;
-  const o = { last, reasons: [], where: [], leaked: [] };
-  if (last) for (const [dev, s] of Object.entries(states)) {
+  // Union over every launch of this attack: a repeat attempt may be stopped by a different check
+  // (the paraphrase is caught by NLI first, then by trust once the stolen key has lost its standing).
+  const runs = hubState ? hubState.attacks.filter(x => x.mode === mode) : [];
+  const o = { last: runs[runs.length - 1] || null, runs: runs.length, reasons: [], where: [], leaked: [] };
+  for (const run of runs) for (const [dev, s] of Object.entries(states)) {
     if (!s) continue;
-    const q = s.quarantine.find(q => q.id === last.id);
-    if (q) { o.reasons = o.reasons.concat(q.reasons); o.where.push(dev); }
-    if (s.memories.some(m => m.id === last.id && m.trust_status === "verified")) o.leaked.push(dev);
+    const q = s.quarantine.find(q => q.id === run.id);
+    if (q) { o.reasons = o.reasons.concat(q.reasons); if (!o.where.includes(dev)) o.where.push(dev); }
+    if (s.memories.some(m => m.id === run.id && m.trust_status === "verified") && !o.leaked.includes(dev)) o.leaked.push(dev);
   }
   return o;
 }
@@ -454,7 +457,7 @@ function renderMatrix() {
       return `<td><span class="cell ${f ? "fired" : ""}" role="img" aria-label="${esc(name)}: ${f ? "fired" : "not fired"}"></span></td>`; }).join("");
     const result = !o.last ? `<span class="muted">Not launched</span>`
       : o.leaked.length ? pill("quarantined", `Reached ${o.leaked.join(", ")}`)
-      : o.where.length ? pill("verified", `Stopped on ${o.where.join(" and ")}`)
+      : o.where.length ? pill("verified", `Stopped on ${o.where.join(" and ")}${o.runs > 1 ? ` (${o.runs}×)` : ""}`)
       : `<span class="small muted">Waiting in the hub. Sync a device.</span>`;
     return `<tr><td class="attack"><b>${esc(a.title)}</b><span class="small muted">${esc(a.story)}</span></td>${cells}<td>${result}</td>
       <td><button class="hit" data-mode="${esc(m)}" onclick="attack(this.dataset.mode)">Launch</button></td></tr>`;
