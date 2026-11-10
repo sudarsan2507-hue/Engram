@@ -464,6 +464,29 @@ function renderMatrix() {
   }).join("");
   el.innerHTML = `<table class="matrix"><thead><tr><th>Attack</th>${CHECKS.map(([n]) => `<th>${esc(n)}</th>`).join("")}<th>Result</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>`;
+  renderTrust();
+}
+
+// Each device's own, unsynced view of its peers: operator cap vs. earned trust.
+function renderTrust() {
+  const el = document.getElementById("trust");
+  if (!el) return;
+  const cards = Object.entries(states).filter(([, s]) => s).map(([dev, s]) => {
+    const rows = Object.entries(s.reputation || {}).sort().map(([peer, r]) => {
+      const below = r.effective_trust < 0.5, pct = v => `${Math.max(0, Math.min(1, v)) * 100}%`;
+      const last = r.last_bad ? `<div class="small muted">last lie: <code>${esc(r.last_bad.subject)}</code> = "${esc(r.last_bad.value)}"
+        (${esc(r.last_bad.reasons.join(", "))})</div>` : "";
+      return `<div class="trust-row">
+        <div class="row"><b class="grow">${esc(peer)}</b>${pill(below ? "quarantined" : "verified", r.effective_trust.toFixed(2))}
+          <span class="small muted">cap ${r.operator_trust.toFixed(2)} · ${r.good} kept · ${r.bad} provable lies</span></div>
+        <div class="trust-bar" role="img" aria-label="${esc(peer)} trust ${r.effective_trust} of cap ${r.operator_trust}, minimum 0.5">
+          <span class="cap" style="width:${pct(r.operator_trust)}"></span><span class="eff ${below ? "below" : ""}" style="width:${pct(r.effective_trust)}"></span>
+          <span class="min" style="left:50%"></span></div>
+        <div class="small muted"><code>${esc(r.formula)}</code></div>${last}</div>`;
+    }).join("") || `<p class="small muted">No peers registered yet. Sync first.</p>`;
+    return `<div class="frame"><h2>${esc(dev)} trusts…</h2>${rows}</div>`;
+  }).join("");
+  el.innerHTML = cards || `<p class="muted">Devices not reachable.</p>`;
 }
 
 // ================================================================ conflicts
@@ -606,11 +629,11 @@ const TOUR = [
   }],
   ["Attack", "attacks", async () => {
     await launchAll();
-    return "<b>Six poisoned memories are in the hub</b>, all saying the sparking charger is safe. The hub does not screen, so nothing is stopped yet.";
+    return "<b>Seven poisoned memories are in the hub</b>, all saying the sparking charger is safe. The hub does not screen, so nothing is stopped yet.";
   }],
   ["Devices pull", "attacks", async () => {
     await sync("kiosk"); await sync("robot");
-    return "<b>All six quarantined.</b> Each red cell is the check that fired. The stolen-key attack is signed by a trusted device under a renamed subject; only the semantic check catches it.";
+    return "<b>All seven quarantined.</b> Each red cell is the check that fired. The two stolen-key attacks are signed by a trusted device under a renamed subject. The near-copy is caught by vector similarity; the reworded one shares no words with the truth, so only the on-device NLI model catches it. Each provable lie also cost the kiosk reputation on the robot (panel below).";
   }],
   ["See the stakes", "floor", async () => {
     setMode("all");

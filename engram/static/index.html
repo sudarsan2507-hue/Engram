@@ -88,6 +88,10 @@
           <button class="hit" onclick="launchAll()">Launch all seven</button>
           <button onclick="sync('kiosk').then(() => sync('robot'))">Sync both devices</button>
         </div>
+        <h2 style="margin-top:26px">Dynamic trust</h2>
+        <p class="small muted" style="max-width:76ch;margin-top:0">Each device scores its peers from its own observations; nothing here is synced or set by the hub.
+          The operator's score is a cap. Only memories with a valid signature under the pinned key count as lies, so a forger cannot frame an honest device.</p>
+        <div class="grid2" id="trust"></div>
       </div>
     </section>
 

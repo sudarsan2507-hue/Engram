@@ -146,6 +146,14 @@ table.data td, table.data th { padding: 6px 8px; border-bottom: 1px solid var(--
 .cell { width: 26px; height: 26px; display: inline-grid; place-items: center; border: 1px dashed var(--line-2);
         transition: background-color .4s var(--ease), transform .4s var(--ease); }
 .cell.fired { background: var(--bad); border: 1px solid var(--bad); transform: scale(1.08); }
+.trust-row { padding: 10px 0; border-top: 1px solid var(--line); display: grid; gap: 6px; }
+.trust-row:first-of-type { border-top: none; }
+.trust-bar { position: relative; height: 10px; background: var(--well); border-radius: 3px; }
+.trust-bar .cap { position: absolute; inset: 0 auto 0 0; border-right: 2px solid var(--ink-3); background: rgba(190, 216, 255, .07); }
+.trust-bar .eff { position: absolute; inset: 1px auto 1px 0; background: var(--ok); border-radius: 2px; transition: width .6s var(--ease), background-color .3s; }
+.trust-bar .eff.below { background: var(--bad); }
+.trust-bar .min { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1px dashed var(--warn); }
+@media (prefers-reduced-motion: reduce) { .trust-bar .eff { transition: none; } }
 .cell.fired::after { content: "✕"; color: #20060a; font-weight: 800; font-size: 13px; }
 
 /* ---------- benchmark ---------- */
