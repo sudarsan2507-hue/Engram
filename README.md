@@ -38,7 +38,7 @@ and the robot reroutes to the sparking charger on a claim the screen quarantined
 ## Quick tour (10 minutes)
 
 1. **Run `python launch.py --demo`.** It resets everything, seeds two devices,
-   syncs them, launches six poisoning attacks, and **asserts** the outcome of
+   syncs them, launches seven poisoning attacks, and **asserts** the outcome of
    every step (exits non-zero if any defense fails). Sample output is under
    [Demo output](#demo-output).
 2. **Open the inspector** at `http://127.0.0.1:8000` and follow the tour dock at
@@ -52,7 +52,7 @@ and the robot reroutes to the sparking charger on a claim the screen quarantined
    pipeline: embed once → screen → copy vectors into the trusted shard.
 5. **Look at the [benchmark](#benchmark-50000-memories)** - filters swept across
    selectivities, payload index on/off, ACORN, recall vs exact search, int8.
-6. **Run `pytest`** - 34 tests against the real `qdrant_edge` API, real
+6. **Run `pytest`** - 45 tests against the real `qdrant_edge` API, real
    embeddings and real Ed25519. No mocks.
 
 ---
@@ -93,7 +93,7 @@ and the robot reroutes to the sparking charger on a claim the screen quarantined
 ## Threat model
 
 Every attack below is in the inspector's attack panel, in `demo.py`, and in
-[`tests/test_e2e.py`](tests/test_e2e.py). All six carry the same dangerous
+[`tests/test_e2e.py`](tests/test_e2e.py). All seven carry the same dangerous
 claim: the sparking Dock 3 charger is *"safe to ignore"*.
 
 | attack | what the attacker has | caught by | quarantine reasons (actual output) |
@@ -104,6 +104,7 @@ claim: the sparking Dock 3 charger is *"safe to ignore"*.
 | Registry key hijack | re-register robot (hub: 409), then compromise hub and swap robot's key | device-side key pinning | `invalid_or_missing_signature`, `registry_key_mismatch`, `contradicts_corroborated_memory` |
 | Sybil device | legitimately registers a new device; **valid signature** | trust + corroboration | `low_trust_source(0.30<0.5)`, `contradicts_corroborated_memory` |
 | Stolen trusted key + subject evasion | kiosk's real private key (trust 0.8); files claim under a renamed subject; **valid signature, trusted source** | semantic neighbor check | `semantic_conflict_with_corroborated_memory` |
+| Stolen key + paraphrase | same stolen key and renamed subject, claim **reworded** ("charging bay three passed inspection") so cosine is ~0.7, under the near-copy bar | on-device NLI, then dynamic trust | `nli_contradiction_with_corroborated_memory`; after three provable lies, `low_trust_source(0.46<0.5)` |
 | Malformed payload | garbage JSON / non-UUID id | schema validation | `malformed_payload` (no crash) |
 | Hub key swap vs legit traffic | compromised registry | pinned keys | legit memories **still accepted** - verified against the key pinned on first contact |
 
@@ -117,12 +118,22 @@ runs and every failure is recorded, so a quarantine entry explains itself.
 3. Ed25519 signature checked against the key **this device pinned** on first
    contact (not the hub's current key) → `invalid_or_missing_signature`; if it
    verifies with the hub's substituted key → `registry_key_mismatch`
-4. Source trust < 0.5 → `low_trust_source`
+4. Source trust < 0.5 → `low_trust_source`. This is the device's own
+   *effective* trust for the signer (see [Dynamic trust](#dynamic-trust)), not
+   the hub's number
 5. Same subject, different value, local memory corroborated by ≥2 devices →
    `contradicts_corroborated_memory`
 6. Dense-vector neighbors (cosine ≥ 0.88, filter `trust_status=verified AND
    subject != this subject`) that are corroborated and disagree →
    `semantic_conflict_with_corroborated_memory`
+7. Only if every check above passed and the subject is new to this device:
+   on-device NLI ([`nli.py`](engram/nli.py), DeBERTa-v3-small, int8 ONNX) over
+   the top 4 corroborated neighbors at cosine ≥ 0.55. Two stages, because raw
+   NLI calls any two unrelated sentences a contradiction ("wifi is strong" vs
+   "printer is low": P = 1.00): first *is it about the same thing* (does the
+   text entail "This is about dock 3", P ≥ 0.80), then *does it contradict*
+   (P ≥ 0.90, both directions) → `nli_contradiction_with_corroborated_memory`.
+   The model runs last, so unsigned or untrusted input never buys model time.
 
 Outcomes: any reason → **quarantine** (SQLite, with evidence). Otherwise: same
 subject + same value → **corroborate** (merge `corroborated_by` across both
@@ -133,6 +144,28 @@ resolution**; else **promote**.
 from the inspector; the released memory then competes in conflict resolution
 (a released low-trust claim still loses to a corroborated value). Provenance
 failures are never releasable.
+
+### Dynamic trust
+
+Each device keeps its own Beta reputation for every peer
+([`reputation.py`](engram/reputation.py)); nothing about it is synced or read
+from the hub:
+
+```
+effective_trust = min(operator_trust, (2 x operator_trust + good) / (2 + good + 4 x bad))
+```
+
+- `good`: that peer's memories this device promoted or corroborated.
+- `bad`: memories **with a valid signature under the pinned key** that were
+  quarantined for their *content*. A forged memory that only claims to come
+  from robot says nothing about robot, so a forger cannot frame an honest
+  device (tested: robot stays at 0.90 on kiosk after impersonation and tamper).
+- The operator's score is a cap: a Sybil cannot farm good memories past 0.30.
+- One lie costs as much as four good memories. In the demo the stolen kiosk
+  key goes 0.80 → 0.56 → 0.46 and from then on is rejected on trust alone.
+  The same score feeds conflict resolution.
+
+![Attack lab after all seven attacks: the paraphrase row fired NLI on its first launch and trust on later ones; below, robot's trust in the kiosk has fallen to 0.46](docs/demo/demo_attack_lab.png)
 
 ## Filters are the security boundary
 
@@ -241,19 +274,22 @@ benchmark data held): **460 MB RSS**, of which the model is 122 MB; shard load
 ## Tests
 
 ```
-pytest            # 34 tests, ~1 min (first run also downloads the ~130 MB embedding model)
+pytest            # 45 tests, ~2 min (first run also downloads the ~130 MB embedding model and the ~335 MB NLI model)
 ```
 
 - `tests/test_core.py` - signing, tamper detection, the float-drift
   regression, PII router, malformed payloads, trust filter vs unfiltered search,
-  payload indexes, corroboration math and time-invariance.
+  payload indexes, corroboration math and time-invariance, the trust cap and
+  decay, and the NLI topic gate on the real model.
 - `tests/test_e2e.py` - hub + two devices in-process (FastAPI `TestClient`):
   steady-state corroboration, conflict convergence on both devices, superseded
   hidden only by the filter, PRIVATE never reaching the hub, only signed fields
-  on the wire, incremental pulls, offline behavior, **all six attacks
+  on the wire, incremental pulls, offline behavior, **all seven attacks
   quarantined with the expected reasons**, 409 on key re-registration, legit
   traffic surviving a registry compromise, malformed payloads, release rules,
-  identity persistence.
+  identity persistence, the paraphrase slipping past cosine but not NLI, a
+  stolen key losing its trust, forgeries not framing an honest device, and
+  legitimate new-subject memories passing NLI.
 
 ## Running pieces individually
 
@@ -271,16 +307,16 @@ python introspect_edge.py     # Step 0: how the qdrant_edge API was confirmed be
 Actual output of `python launch.py --demo` (verbatim):
 
 ```
-== 0. Reset hub + both devices, load MOCK seed memories ==============
+== 0. Reset hub + both devices, load sample seed memories ============
    robot holds back 'owner_contact': held: PII detected (email)
    [PASS] PII router held exactly one robot memory back as PRIVATE
 
 == 1. Both devices offline: sync is blocked, hybrid search still works 
    robot: sync -> 'offline: sync disabled, local search still works'
-   robot: top hit dock3=broken  (embed 9.31 ms + vector search 6.23 ms, filter trust_status=verified)
+   robot: top hit dock3=broken  (embed 9.48 ms + vector search 1.01 ms, filter trust_status=verified)
    [PASS] robot searches offline, cannot sync
    kiosk: sync -> 'offline: sync disabled, local search still works'
-   kiosk: top hit dock3=broken  (embed 10.78 ms + vector search 0.93 ms, filter trust_status=verified)
+   kiosk: top hit dock3=broken  (embed 9.17 ms + vector search 2.01 ms, filter trust_status=verified)
    [PASS] kiosk searches offline, cannot sync
 
 == 2. Sync round: robot -> hub -> kiosk -> hub -> robot ==============
@@ -292,21 +328,22 @@ Actual output of `python launch.py --demo` (verbatim):
    [PASS] kiosk: dock3=broken corroborated by kiosk+robot
 
 == 3. Genuine conflict: robot says firmware 2.3.1, kiosk says 2.3.0 ==
-   robot: 2.3.1  score = avg_trust x decay x devices = 0.90 x 1.0000 x 1 = 0.9
    robot: 2.3.0  score = avg_trust x decay x devices = 0.80 x 1.0000 x 1 = 0.8
-   kiosk: 2.3.1  score = avg_trust x decay x devices = 0.90 x 1.0000 x 1 = 0.9
+   robot: 2.3.1  score = avg_trust x decay x devices = 0.90 x 1.0000 x 1 = 0.9
    kiosk: 2.3.0  score = avg_trust x decay x devices = 0.80 x 1.0000 x 1 = 0.8
+   kiosk: 2.3.1  score = avg_trust x decay x devices = 0.90 x 1.0000 x 1 = 0.9
    [PASS] both devices converge on firmware=2.3.1
    [PASS] loser is marked superseded, signed content untouched
 
-== 4. Six poisoning attacks, all claiming the sparking Dock 3 charger is 'safe to ignore' 
+== 4. Seven poisoning attacks, all claiming the sparking Dock 3 charger is 'safe to ignore' 
    Unsigned injection                     -> injected into hub
    Impersonate robot                      -> injected into hub
    Tamper in transit                      -> signature copied unchanged from robot's genuine memory
    Registry key hijack                    -> re-register as robot -> HTTP 409: device 'robot' is already registered with a different key; simulated hub compromise: robot's registry key swapped to the attacker's key
-   Sybil device                           -> registered helper-bot-4e6a, hub assigned default trust 0.3
+   Sybil device                           -> registered helper-bot-3c61, hub assigned default trust 0.3
    Stolen trusted key + subject evasion   -> signed with kiosk's real private key; subject renamed dock3 -> charging_station_3
-   robot sync: {'received': 3, 'skipped_known': 0, 'promoted': 0, 'corroborated': 0, 'conflicts': 0, 'quarantined': 3}
+   Stolen key + paraphrase                -> attempt 1: signed with kiosk's real key, subject 'bay_three', text 'Charging bay three passed inspection and is fine to use'
+   robot sync: {'received': 4, 'skipped_known': 0, 'promoted': 0, 'corroborated': 0, 'conflicts': 0, 'quarantined': 4}
    kiosk sync: {'received': 5, 'skipped_known': 0, 'promoted': 0, 'corroborated': 0, 'conflicts': 0, 'quarantined': 5}
 
 == 5. Where did each attack end up? ==================================
@@ -316,6 +353,10 @@ Actual output of `python launch.py --demo` (verbatim):
    [PASS] Registry key hijack                    quarantined on kiosk: ['invalid_or_missing_signature', 'registry_key_mismatch', 'contradicts_corroborated_memory']
    [PASS] Sybil device                           quarantined on kiosk: ['low_trust_source(0.30<0.5)', 'contradicts_corroborated_memory']
    [PASS] Stolen trusted key + subject evasion   quarantined on robot: ['semantic_conflict_with_corroborated_memory']
+   [PASS] Stolen key + paraphrase                quarantined on robot: ['nli_contradiction_with_corroborated_memory']
+   paraphrase vs corroborated dock3=broken: NLI: about dock3 (P=0.98), contradicts it (P=1.00), cosine 0.706
+   paraphrase vs corroborated dock3=broken: NLI: about dock3 (P=0.98), contradicts it (P=1.00), cosine 0.650
+   [PASS] reworded claim slipped past cosine, caught by on-device NLI
    [PASS] robot: poison absent from search
    [PASS] kiosk: poison absent from search
 
@@ -323,6 +364,18 @@ Actual output of `python launch.py --demo` (verbatim):
    filter on : ['2.3.1(verified)']
    filter off: ['2.3.0(superseded)', '2.3.1(verified)']
    [PASS] superseded value only visible with the filter removed
+
+== 7. Persistent attacker: the stolen kiosk key keeps lying in new words 
+   robot's trust in kiosk: 0.56  (min(0.80, (2x0.80 + 9) / (2 + 9 + 4x2)))
+   attempt -> charging_bay_three quarantined ['nli_contradiction_with_corroborated_memory']
+   robot's trust in kiosk: 0.46  (min(0.80, (2x0.80 + 9) / (2 + 9 + 4x3)))
+   attempt -> charger_3_status   quarantined ['low_trust_source(0.46<0.5)']
+   robot's trust in kiosk: 0.46  (min(0.80, (2x0.80 + 9) / (2 + 9 + 4x3)))
+   attempt -> station_three      quarantined ['low_trust_source(0.46<0.5)']
+   robot's trust in kiosk: 0.46  (min(0.80, (2x0.80 + 9) / (2 + 9 + 4x3)))
+   [PASS] stolen key lost its trust: kiosk now below the 0.5 minimum on robot
+   [PASS] the next lie is rejected on trust alone, before any model runs
+   [PASS] forged 'robot' memories did not frame robot on kiosk (trust 0.9)
 
 == Result ============================================================
    all checks passed
@@ -334,22 +387,27 @@ Actual output of `python launch.py --demo` (verbatim):
   real sensors or an LLM. Labeled MOCK in the UI.
 - **Simulated network**: two devices are two local processes; "offline" is a
   flag that blocks hub calls. Search never touches the network either way.
-- **Static trust**: trust scores are operator config (`engram/hub_config.json`)
-  and never adapt to behavior.
+- **Trust only goes down**: dynamic trust lowers a lying peer but has no time
+  decay or recovery yet; a device whose key was stolen stays distrusted until
+  an operator re-provisions it. Colluding devices that corroborate each other
+  are not modeled.
 - **Trust on first use**: devices pin the first key they see for a peer. A hub
   compromised *before* first contact could plant a key; production would
   provision keys out of band.
-- **Semantic check catches near-copies, not paraphrases**: a paraphrased
-  evasion scored cosine 0.68–0.76, below the 0.88 threshold. It would still be
-  caught by provenance or trust unless the attacker also holds a trusted key.
+- **NLI thresholds are calibrated on a small set**: the topic (0.80) and
+  contradiction (0.90) thresholds were set on the 20 seed memories and four
+  paraphrased attacks. Expect false positives on real fleets until they are
+  calibrated on a larger held-out set. NLI costs ~40 ms per pair on CPU and
+  ~335 MB on disk.
 - **Corroborated facts are sticky**: a genuine change to a corroborated fact
   arriving from one device is quarantined until corroborated or released by an
   operator. That is the intended trade-off, but it is a trade-off.
 - **Sync is REST, not snapshots**: points move as signed JSON through the hub
   and are re-embedded by the receiver, instead of `EdgeShard` partial snapshots
   (which cannot be screened per point; see Architecture).
-- **No LLM contradiction detection**: "contradiction" means same subject with a
-  different value, or a near-copy under another subject.
+- **Contradiction is checked only against corroborated memories**: a
+  paraphrased lie about a fact only one device holds is judged by provenance
+  and trust alone.
 - Hub state is in memory; restarting the hub forgets the log (devices keep
   theirs).
 
